@@ -81,6 +81,14 @@ export default function HomePage() {
     );
   };
 
+  // Enriched Job Callback to update in-memory state
+  const handleJobEnriched = useCallback((enriched: JobListing) => {
+    setSelectedJob(enriched);
+    setJobs((prev) =>
+      prev.map((j) => (j.id === enriched.id ? enriched : j))
+    );
+  }, []);
+
   // Change CV Handler with celebration
   const handleSelectCV = (cv: UserCVProfile | null) => {
     setActiveCV(cv);
@@ -761,6 +769,7 @@ export default function HomePage() {
         activeCV={activeCV}
         isSaved={selectedJob ? savedJobIds.includes(selectedJob.id) : false}
         onToggleSave={handleToggleSave}
+        onJobEnriched={handleJobEnriched}
       />
 
       {/* Footer */}

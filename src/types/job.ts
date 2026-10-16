@@ -74,6 +74,45 @@ export interface JobListing {
   views_count?: number;
   applied_count?: number;
   source_cross_posted?: PlatformSource[]; // If deduplicated across multiple platforms
+  company_banner?: string;
+  company_website?: string;
+  company_size?: string;
+  company_intro?: string;
+  contact_info?: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    instructions?: string;
+    language?: string;
+  };
+  description_sections?: {
+    heading: string;
+    items: string[];
+  }[];
+  description_items?: string[];
+  welfare_list?: string[];
+  other_info?: {
+    degree?: string;
+    gender?: string;
+    allowance?: string;
+    probation_period?: string;
+    training_opportunity?: string;
+    age_range?: string;
+    working_hours?: string;
+    workplace_environment?: string;
+    vacation_days?: string;
+    detailed_benefits?: string[];
+    exact_salary?: string;
+    job_level?: string;
+    work_type?: string;
+    experience_required?: string;
+    recruitment_quantity?: string;
+    industry_category?: string;
+    posted_date_text?: string;
+    deadline_text?: string;
+    [key: string]: any;
+  };
 }
 
 export interface UserCVProfile {

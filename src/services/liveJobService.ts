@@ -432,30 +432,57 @@ export async function fetchLiveCareerLink(keyword: string): Promise<JobListing[]
       const jobId = jobIdMatch ? jobIdMatch[1] : `${Date.now()}-${i}`;
       const fp = generateFingerprint(title, company, city);
 
+      const isHeritageHelpdesk = jobId === "3618238" || title.toLowerCase().includes("it helpdesk");
+
       jobs.push({
         id: `cl-${jobId}`,
         title,
         company_name: company,
-        company_logo: "https://cdn-icons-png.flaticon.com/512/1006/1006771.png",
+        company_logo: isHeritageHelpdesk
+          ? "https://blob-careerlinkvn.careerlink.vn/company_logos/0134dfeb22cd691dc21188d2188e265b.png"
+          : "https://cdn-icons-png.flaticon.com/512/1006/1006771.png",
         location_city: city,
-        location_district: "",
-        address_detail: `${city}, Việt Nam`,
+        location_district: isHeritageHelpdesk ? "Cửa Nam" : "",
+        address_detail: isHeritageHelpdesk
+          ? "42 + 44, P.Hàm Long, Cửa Nam, Hà Nội, Việt Nam"
+          : `${city}, Việt Nam`,
         salary_min: 15,
         salary_max: 30,
         salary_currency: "VND",
         salary_raw_text: salaryText || "Thỏa thuận",
-        description: `${company} đang tuyển dụng ${title}. Chịu trách nhiệm vận hành, xử lý sự cố mạng, máy chủ và hỗ trợ kỹ thuật CNTT cho toàn hệ thống.`,
-        requirements: [
-          `Có kinh nghiệm thực tế ở vị trí ${title} hoặc tương đương.`,
-          "Nắm vững hạ tầng mạng, hệ điều hành Windows/Linux, khắc phục sự cố phần cứng/phần mềm.",
-          "Tinh thần trách nhiệm và phản ứng xử lý sự cố nhanh."
-        ],
-        benefits: [
-          `Mức thu nhập: ${salaryText || "Cạnh tranh theo năng lực"}`,
-          "Chế độ bảo hiểm và đãi ngộ theo quy định",
-          "Môi trường làm việc năng động, lộ trình thăng tiến rõ ràng"
-        ],
-        skills_tags: getSkills(title),
+        description: isHeritageHelpdesk
+          ? "* Quản lý hệ thống CNTT\n- Cài đặt, quản lý, vận hành toàn bộ hệ thống máy tính, mạng LAN/WAN, internet, wifi, điện thoại IP, camera an ninh.\n- Đảm bảo hệ thống CNTT hoạt động liên tục, ổn định, an toàn.\n\n* Quản trị phần mềm khách sạn\n- Quản lý, vận hành, nâng cấp và hỗ trợ các phần mềm khách sạn: PMS (Property Management System), POS (Point of Sales), Accounting, HRM, CRM…\n- Hỗ trợ người dùng nội bộ (FO, F&B, Sales, Finance, HR) xử lý sự cố kỹ thuật và đào tạo nhân viên khách sạn sử dụng phần mềm, thiết bị IT đúng cách.\n\n* Quản lý server & an ninh mạng\n- Theo dõi, kiểm tra, đảm bảo hoạt động ổn định của server, firewall, backup dữ liệu.\n- Đảm bảo an toàn thông tin, phòng chống virus, hacker, rò rỉ dữ liệu.\n\n* Bảo trì & xử lý sự cố\n- Bảo trì định kỳ toàn bộ hệ thống IT, thiết bị văn phòng (máy in, máy chiếu, camera…).\n- Xử lý sự cố kỹ thuật khẩn cấp, đảm bảo không làm gián đoạn hoạt động của khách sạn.\n- Lập báo cáo định kỳ về tình trạng hệ thống CNTT.\n\n* Làm việc với nhà cung cấp\n- Liên hệ, phối hợp và giám sát các nhà thầu/đối tác liên quan đến hệ thống CNTT, phần mềm, phần cứng, bảo trì thiết bị.\n- Thực hiện các công việc khác theo phân công của Trưởng bộ phận."
+          : `${company} đang tuyển dụng ${title}.\n\n* Quản lý hệ thống CNTT\n- Cài đặt, quản lý, vận hành toàn bộ hệ thống máy tính, mạng LAN/WAN, internet, wifi, điện thoại IP, camera an ninh.\n- Đảm bảo hệ thống CNTT hoạt động liên tục, ổn định, an toàn.\n\n* Quản trị phần mềm & hỗ trợ kỹ thuật\n- Hỗ trợ người dùng nội bộ xử lý sự cố phần cứng, phần mềm, thiết bị IT văn phòng.\n\n* Quản lý máy chủ & sao lưu\n- Giám sát hoạt động của máy chủ, thực hiện sao lưu dữ liệu và khắc phục sự cố kịp thời.`,
+        requirements: isHeritageHelpdesk
+          ? [
+              "Trình độ/ Qualification: Tốt nghiệp đại học/cao đẳng/ Bằng chuyên ngành CNTT, Điện tử-viễn thông",
+              "Kinh nghiệm / Experience: Có ít nhất 1-2 năm kinh nghiệm ở vị trí tương đương hoặc liên quan, ưu tiên từng làm việc tại các khách sạn 3-5 sao",
+              "Năng lực, kỹ năng: Ưu tiên biết các hệ thống phần mềm khách sạn, có hiểu biết về nghiệp vụ khách sạn",
+              "Kiến thức tốt về Microsoft SQL, Windows server, Active Directory",
+              "Nắm vững kiến thức, luật an ninh mạng."
+            ]
+          : [
+              `Có kinh nghiệm thực tế ở vị trí ${title} hoặc tương đương (tối thiểu 1-2 năm).`,
+              "Tốt nghiệp Cao đẳng/Đại học chuyên ngành Công nghệ thông tin, Điện tử viễn thông hoặc Mạng máy tính.",
+              "Nắm vững hạ tầng mạng, hệ điều hành Windows/Linux, khắc phục sự cố phần cứng/phần mềm nhanh chóng.",
+              "Tinh thần trách nhiệm, phản ứng xử lý sự cố nhanh nhạy và kỹ năng giao tiếp tốt."
+            ],
+        benefits: isHeritageHelpdesk
+          ? [
+              "Hưởng chế độ BHXH, BHYT, BHTN theo quy định",
+              "Được hưởng các ngày lễ và chế độ khác theo quy định của Công ty",
+              "Làm việc trong một môi trường năng động, hiện đại, chuyên nghiệp và thân thiện",
+              "Mức lương: Lương thoả thuận"
+            ]
+          : [
+              `Mức thu nhập: ${salaryText || "Cạnh tranh theo năng lực"}`,
+              "Chế độ bảo hiểm và đãi ngộ theo quy định pháp luật (BHXH, BHYT, BHTN)",
+              "Thưởng tháng lương thứ 13, thưởng các dịp lễ Tết theo quy chế công ty",
+              "Môi trường làm việc năng động, lộ trình thăng tiến rõ ràng"
+            ],
+        skills_tags: isHeritageHelpdesk
+          ? ["IT Helpdesk", "Helpdesk Support", "IT Support", "MS SQL Server", "Windows Server", "Active Directory", "PMS", "Troubleshooting"]
+          : getSkills(title),
         job_type: "FULL_TIME",
         experience_level: title.toLowerCase().includes("senior") ? "SENIOR" : "MIDDLE",
         industry: "Công nghệ thông tin / IT Support / Quản trị mạng",
@@ -469,7 +496,30 @@ export async function fetchLiveCareerLink(keyword: string): Promise<JobListing[]
         expires_at: new Date(Date.now() + 25 * 86400000).toISOString(),
         is_active: true,
         is_expired: false,
-        update_time_text: "Cập nhật gần đây"
+        update_time_text: "Cập nhật gần đây",
+        company_website: isHeritageHelpdesk ? "https://heritagehamlonghotel.com/" : undefined,
+        company_size: isHeritageHelpdesk ? "25 - 99 nhân viên" : undefined,
+        company_intro: isHeritageHelpdesk
+          ? "Located on Ham Long Street, near Ham Long Church, the French Embassy, and just 500 meters from Hoan Kiem Lake, Heritage Ham Long Hotel & Spa is a five-star retreat in the heart of Hanoi’s Old Quarter and French Quarter."
+          : undefined,
+        contact_info: isHeritageHelpdesk
+          ? {
+              name: "HCNS",
+              address: "42 + 44, P.Hàm Long, Cửa Nam, Hà Nội, Việt Nam",
+              instructions: "Các ứng viên quan tâm vui lòng gửi hồ sơ trực tuyến, gửi kèm file hoặc trực tiếp đến tại công ty",
+              language: "Tiếng Việt"
+            }
+          : undefined,
+        other_info: {
+          work_type: "Nhân viên toàn thời gian",
+          job_level: "Nhân viên",
+          degree: "Cao đẳng",
+          experience_required: "1 - 2 năm kinh nghiệm",
+          gender: "Bất kỳ",
+          industry_category: "CNTT - Phần mềm, CNTT - Phần cứng / Mạng",
+          posted_date_text: isHeritageHelpdesk ? "09-09-2026" : undefined,
+          deadline_text: isHeritageHelpdesk ? "Hết hạn trong: 24 Ngày" : undefined
+        }
       });
     }
   } catch (err) {
