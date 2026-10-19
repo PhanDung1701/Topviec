@@ -6,6 +6,7 @@ Chạy: python crawler/api_service.py hoặc npm run scrapling:api
 
 import sys
 import asyncio
+import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, BackgroundTasks
@@ -41,14 +42,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Trạng thái tiến trình cào
-crawl_state = {
-    "is_running": False,
-    "last_run": None,
-    "last_result": None,
-    "error": None
-}
-
 class ScrapeDetailRequest(BaseModel):
     url: str
     platform: Optional[str] = None
@@ -74,7 +67,6 @@ async def scrape_detail_endpoint(req: ScrapeDetailRequest):
         raise HTTPException(status_code=400, detail="Thiếu tham số url")
 
     try:
-        # Chạy trong threadpool để không block event loop của FastAPI
         loop = asyncio.get_event_loop()
         detail_data = await loop.run_in_executor(
             None,
@@ -88,11 +80,23 @@ async def scrape_detail_endpoint(req: ScrapeDetailRequest):
             "data": detail_data
         }
     except Exception as e:
-        # Nếu có lỗi, trả về thông báo lỗi chi tiết
         return {
             "success": False,
             "error": str(e)
         }
+
+INTERVAL_HOURS = 6
+INTERVAL_SECONDS = INTERVAL_HOURS * 3600
+
+# Trạng thái tiến trình cào
+crawl_state = {
+    "is_running": False,
+    "last_run": None,
+    "last_result": None,
+    "next_run": None,
+    "interval_hours": INTERVAL_HOURS,
+    "error": None
+}
 
 def background_crawl_task():
     global crawl_state
@@ -101,15 +105,35 @@ def background_crawl_task():
     try:
         res = run_scrapling_aggregation()
         crawl_state["last_result"] = res
-        crawl_state["last_run"] = asyncio.get_event_loop().time()
+        now_dt = datetime.datetime.now()
+        crawl_state["last_run"] = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+        crawl_state["next_run"] = (now_dt + datetime.timedelta(seconds=INTERVAL_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
     except Exception as e:
         crawl_state["error"] = str(e)
     finally:
         crawl_state["is_running"] = False
 
+async def periodic_crawl_loop():
+    """Vòng lặp tự động cào định kỳ mỗi 6 tiếng"""
+    # Đợi 10 giây sau khi server khởi động rồi lên lịch
+    await asyncio.sleep(10)
+    while True:
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, background_crawl_task)
+        except Exception as e:
+            print(f"⚠️ Lỗi trong vòng lặp cào định kỳ 6 tiếng: {e}")
+        await asyncio.sleep(INTERVAL_SECONDS)
+
+@app.on_event("startup")
+async def startup_event():
+    """Khởi động tiến trình cào tự động ngầm mỗi 6 tiếng khi service chạy"""
+    asyncio.create_task(periodic_crawl_loop())
+    print(f"🕒 Đã kích hoạt bộ lập lịch tự động: Cào và cập nhật dữ liệu việc làm IT mỗi {INTERVAL_HOURS} tiếng.")
+
 @app.post("/api/crawl/run")
 def trigger_crawl(background_tasks: BackgroundTasks):
-    """Kích hoạt tiến trình cào toàn diện chạy nền"""
+    """Kích hoạt tiến trình cào toàn diện chạy nền ngay lập tức"""
     global crawl_state
     if crawl_state["is_running"]:
         return {"success": False, "message": "Tiến trình cào đang chạy dở, vui lòng đợi hoàn tất."}
@@ -119,9 +143,11 @@ def trigger_crawl(background_tasks: BackgroundTasks):
 
 @app.get("/api/crawl/status")
 def get_crawl_status():
-    """Xem trạng thái tiến trình cào mới nhất"""
+    """Xem trạng thái tiến trình cào và thời gian đợt cào kế tiếp"""
     return crawl_state
 
 if __name__ == "__main__":
-    print("🚀 Khởi chạy TopViec Scrapling Service tại http://127.0.0.1:8000...")
+    print(f"🚀 Khởi chạy TopViec Scrapling Service tại http://127.0.0.1:8000...")
+    print(f"⏰ Chế độ tự động cào ngầm mỗi {INTERVAL_HOURS} tiếng đã bật!")
     uvicorn.run("crawler.api_service:app", host="127.0.0.1", port=8000, reload=False)
+

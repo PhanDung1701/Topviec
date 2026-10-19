@@ -9,7 +9,8 @@
     "lint": "eslint",
     "crawl": "node scripts/job-aggregator.js",
     "scrapling:api": ".\\.venv\\Scripts\\python crawler/api_service.py",
-    "scrapling:crawl": ".\\.venv\\Scripts\\python crawler/aggregator.py"
+    "scrapling:crawl": ".\\.venv\\Scripts\\python crawler/aggregator.py",
+    "scrapling:schedule": ".\\.venv\\Scripts\\python crawler/scheduler.py"
   },
   "dependencies": {
     "@types/canvas-confetti": "^1.9.0",
