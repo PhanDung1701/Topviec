@@ -404,8 +404,40 @@ export async function scrapeGenericDetail(
 }
 
 /**
+ * Scrapling Python Service Bridge
+ * When the local Scrapling service is running (http://127.0.0.1:8000), use its anti-bot stealth & adaptive extractor
+ */
+async function fetchFromScraplingService(
+  url: string,
+  platform?: string
+): Promise<Partial<JobListing> | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    const response = await fetch("http://127.0.0.1:8000/api/scrape/detail", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, platform, use_stealth: false }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData.success && resData.data) {
+        return resData.data;
+      }
+    }
+  } catch {
+    // Python service is offline or unreachable -> gracefully continue with native scraper
+  }
+  return null;
+}
+
+/**
  * MASTER ENRICHMENT FUNCTION
- * Automatically determines platform and extracts 100% full detail from original page
+ * Prioritizes Scrapling (Anti-bot & Adaptive Selectors), with instant fallback to native scrapers
  */
 export async function enrichJobDetail(job: JobListing): Promise<JobListing> {
   // Check cache
@@ -416,22 +448,37 @@ export async function enrichJobDetail(job: JobListing): Promise<JobListing> {
 
   let enriched: JobListing = { ...job };
 
-  // If CareerLink
+  // 1. Try Scrapling Python Engine first if source_url is valid
+  if (job.source_url && job.source_url.startsWith("http")) {
+    const scraplingDetail = await fetchFromScraplingService(job.source_url, job.source_platform);
+    if (scraplingDetail && scraplingDetail.description && scraplingDetail.description.length > 50) {
+      enriched = {
+        ...enriched,
+        ...scraplingDetail,
+        // Preserve primary keys
+        id: job.id,
+        source_job_id: job.source_job_id,
+        source_platform: job.source_platform,
+        source_url: job.source_url,
+      };
+      detailCache.set(cacheKey, enriched);
+      detailCache.set(job.id, enriched);
+      return enriched;
+    }
+  }
+
+  // 2. Fallback to native TypeScript scraper
   if (
     job.source_platform === "CAREERLINK" ||
     job.source_url.includes("careerlink.vn")
   ) {
     enriched = await scrapeCareerLinkDetail(job.source_url, job);
-  }
-  // If TopCV
-  else if (
+  } else if (
     job.source_platform === "TOPCV" ||
     job.source_url.includes("topcv.vn")
   ) {
     enriched = await scrapeTopCvDetail(job.source_url, job);
-  }
-  // Other platforms
-  else if (job.source_url && job.source_url.startsWith("http")) {
+  } else if (job.source_url && job.source_url.startsWith("http")) {
     enriched = await scrapeGenericDetail(job.source_url, job);
   }
 

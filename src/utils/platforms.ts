@@ -112,7 +112,7 @@ export const PLATFORM_CONFIGS: Record<PlatformSource, PlatformConfig> = {
     badgeBg: "bg-teal-600",
     badgeText: "text-white",
     logoLetter: "JBK",
-    domain: "joboko.com",
+    domain: "vn.joboko.com",
   },
   INDEED: {
     key: "INDEED",
@@ -141,28 +141,87 @@ export const ALL_PLATFORMS: PlatformSource[] = [
   "INDEED",
 ];
 
+export function toAsciiSlug(text: string): string {
+  if (!text) return "it";
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function sanitizeSearchQuery(title: string, company?: string): string {
+  const cleanTitle = (title || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/[\\/|:;*+?^${}="!@#%~`,._&]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const cleanCompany = (company || "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/công ty|tnhh|cổ phần|cp|tập đoàn|corporation|solution|vietnam/gi, " ")
+    .replace(/[\\/|:;*+?^${}="!@#%~`,._&]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const combined = `${cleanTitle} ${cleanCompany}`.replace(/\s+/g, " ").trim();
+  return combined || "IT Support";
+}
+
 export function getPlatformLiveSearchUrl(platform: PlatformSource, title: string, company?: string): string {
-  const query = encodeURIComponent(`${title || ""} ${company || ""}`.trim() || "IT");
+  const query = sanitizeSearchQuery(title, company);
+  const encoded = encodeURIComponent(query);
+
   switch (platform) {
     case "TOPCV":
-      return `https://www.topcv.vn/tim-viec-lam?keyword=${query}`;
+      return `https://www.topcv.vn/tim-viec-lam-moi-nhat?keyword=${encoded}`;
     case "VIETNAMWORKS":
-      return `https://www.vietnamworks.com/viec-lam?q=${query}`;
+      return `https://www.vietnamworks.com/viec-lam?q=${encoded}`;
     case "VIECLAM24H":
-      return `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?keyword=${query}`;
+      return `https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?keyword=${encoded}`;
     case "CAREERVIET":
-      return `https://careerviet.vn/viec-lam/${encodeURIComponent(title || "IT")}-k-vi.html`;
+      return `https://careerviet.vn/viec-lam/${toAsciiSlug(title || "IT Support")}-k-vi.html`;
     case "JOBSGO":
-      return `https://jobsgo.vn/viec-lam.html?keyword=${query}`;
+      return `https://jobsgo.vn/viec-lam.html?keyword=${encoded}`;
     case "CAREERLINK":
-      return `https://www.careerlink.vn/tim-viec-lam-nhanh?keyword=${query}`;
+      return `https://www.careerlink.vn/tim-viec-lam-nhanh?keyword=${encoded}`;
     case "JOBOKO":
-      return `https://joboko.com/tim-viec-lam?q=${query}`;
+      return `https://vn.joboko.com/tim-viec-lam?q=${encoded}`;
     case "INDEED":
-      return `https://vn.indeed.com/jobs?q=${query}`;
+      return `https://vn.indeed.com/jobs?q=${encoded}`;
     default:
-      return `https://www.google.com/search?q=${query}`;
+      return `https://www.google.com/search?q=${encoded}`;
   }
+}
+
+export function isDirectJobUrl(url: string): boolean {
+  if (!url || !url.startsWith("http")) return false;
+  // If it has search query indicators, it is not a direct job post
+  if (
+    url.includes("keyword=") ||
+    url.includes("?q=") ||
+    url.includes("&q=") ||
+    url.includes("-k-vi.html") ||
+    url.includes("tim-viec-lam?") ||
+    url.includes("tim-kiem-viec-lam")
+  ) {
+    return false;
+  }
+  // Check known platform direct detail patterns
+  if (url.includes("topcv.vn/viec-lam/") || url.includes("topcv.vn/brand/")) return true;
+  if (url.includes("careerviet.vn/vi/tim-viec-lam/")) return true;
+  if (url.includes("vietnamworks.com/") && url.includes("-jv")) return true;
+  if (url.includes("careerlink.vn/tim-viec-lam/") && /\/\d+/.test(url)) return true;
+  if (url.includes("jobsgo.vn/viec-lam/") && url.includes(".html")) return true;
+  if (url.includes("vieclam24h.vn/") && url.includes("id") && url.includes(".html")) return true;
+  if (url.includes("vn.joboko.com/viec-lam-")) return true;
+  if (url.includes("indeed.com/viewjob")) return true;
+  return true;
 }
 
 export function buildApplyUrl(
@@ -172,30 +231,44 @@ export function buildApplyUrl(
   jobTitle?: string,
   companyName?: string
 ): string {
-  // Check if originalUrl is a known fake/stale mock slug that would 404
-  const isMockSlug =
-    !originalUrl ||
-    originalUrl.includes("92019") ||
-    originalUrl.includes("123456") ||
-    originalUrl.includes("c12p99") ||
-    originalUrl.includes("35A9012") ||
-    originalUrl.includes("298102") ||
-    originalUrl.includes("102938") ||
-    originalUrl.includes("qa-automation-lead-001") ||
-    originalUrl.includes("example.com");
+  let targetUrl = (originalUrl || "").trim();
 
-  if (isMockSlug) {
-    // Return verified live search URL for this platform to guarantee 0% 404
-    return getPlatformLiveSearchUrl(sourcePlatform, jobTitle || "IT Support Developer", companyName);
+  // 1. Check if originalUrl is missing or is an invalid placeholder
+  const isMockOrBroken =
+    !targetUrl ||
+    targetUrl.includes("example.com") ||
+    targetUrl.includes("vietnamworks.com/404");
+
+  if (isMockOrBroken) {
+    return getPlatformLiveSearchUrl(sourcePlatform, jobTitle || "IT Support", companyName);
   }
 
-  // If already a live search or listing URL with query parameter, return directly to avoid param clobbering
-  if (originalUrl.includes("keyword=") || originalUrl.includes("?q=") || originalUrl.includes("&q=")) {
-    return originalUrl;
+  // 2. Fix Joboko broken domain (joboko.com -> vn.joboko.com)
+  if (targetUrl.includes("://joboko.com/")) {
+    targetUrl = targetUrl.replace("://joboko.com/", "://vn.joboko.com/");
   }
 
+  // 3. Fix TopCV search url format if encountered
+  if (targetUrl.includes("topcv.vn/tim-viec-lam?")) {
+    targetUrl = targetUrl.replace("topcv.vn/tim-viec-lam?", "topcv.vn/tim-viec-lam-moi-nhat?");
+  }
+
+  // 4. If targetUrl is an indirect search URL with dangerous characters, regenerate clean live search URL
+  if (
+    !isDirectJobUrl(targetUrl) &&
+    (targetUrl.includes("%28") ||
+      targetUrl.includes("%29") ||
+      targetUrl.includes("%2F") ||
+      targetUrl.includes("(") ||
+      targetUrl.includes(")") ||
+      targetUrl.includes("/"))
+  ) {
+    return getPlatformLiveSearchUrl(sourcePlatform, jobTitle || "IT Support", companyName);
+  }
+
+  // 5. Append UTM analytics tags safely to direct job urls
   try {
-    const url = new URL(originalUrl);
+    const url = new URL(targetUrl);
     url.searchParams.set("utm_source", "topviec.vn");
     url.searchParams.set("utm_medium", "job_aggregator");
     url.searchParams.set("utm_campaign", "ai_job_match");
@@ -203,7 +276,8 @@ export function buildApplyUrl(
     url.searchParams.set("ref", "topviec_vietnam");
     return url.toString();
   } catch {
-    const separator = originalUrl.includes("?") ? "&" : "?";
-    return `${originalUrl}${separator}utm_source=topviec.vn&utm_medium=job_aggregator&utm_campaign=ai_job_match&utm_content=${jobId}`;
+    const separator = targetUrl.includes("?") ? "&" : "?";
+    return `${targetUrl}${separator}utm_source=topviec.vn&utm_medium=job_aggregator&utm_campaign=ai_job_match&utm_content=${jobId}`;
   }
 }
+

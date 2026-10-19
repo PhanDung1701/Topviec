@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "crawl": "node scripts/job-aggregator.js"
+    "crawl": "node scripts/job-aggregator.js",
+    "scrapling:api": ".\\.venv\\Scripts\\python crawler/api_service.py",
+    "scrapling:crawl": ".\\.venv\\Scripts\\python crawler/aggregator.py"
   },
   "dependencies": {
     "@types/canvas-confetti": "^1.9.0",

@@ -99,7 +99,7 @@ export const INITIAL_CRAWLER_STATUSES: CrawlerStatus[] = [
     deduplicatedCount: 15,
     totalActiveJobs: 15120,
     healthPercent: 99.2,
-    targetDomain: "joboko.com",
+    targetDomain: "vn.joboko.com",
   },
   {
     platform: "INDEED",

@@ -370,7 +370,10 @@ function createJobEntry({
   benefits
 }) {
   const fp = generateFingerprint(title, company, city);
-  const q = encodeURIComponent(searchQuery || `${title} ${company}`);
+  const cleanTitle = (title || "").replace(/\([^)]*\)/g, " ").replace(/[\\/|:;*+?^${}="!@#%~`,._&]/g, " ").trim();
+  const cleanCompany = (company || "").replace(/công ty|tnhh|cổ phần|cp|tập đoàn/gi, " ").replace(/[\\/|:;*+?^${}="!@#%~`,._&]/g, " ").trim();
+  const rawQ = searchQuery || `${cleanTitle} ${cleanCompany}`.replace(/\s+/g, ' ').trim();
+  const q = encodeURIComponent(rawQ || 'IT Support');
   
   let searchUrl = '';
   switch (platform) {
@@ -390,7 +393,7 @@ function createJobEntry({
       searchUrl = `https://vn.indeed.com/jobs?q=${q}`;
       break;
     case 'JOBOKO':
-      searchUrl = `https://joboko.com/tim-viec-lam?q=${q}`;
+      searchUrl = `https://vn.joboko.com/tim-viec-lam?q=${q}`;
       break;
     default:
       searchUrl = `https://www.google.com/search?q=${q}`;
