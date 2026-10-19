@@ -181,6 +181,7 @@ export const IT_SUBFIELD_LABELS: Record<ITSubfield, string> = {
   IT_SUPPORT_HELPDESK: "IT Support & Helpdesk",
   SYSTEM_ADMIN: "Quản trị hệ thống (System Admin)",
   NETWORK_ENGINEER: "Quản trị mạng (Network Engineer)",
+  NETWORK_SYSTEM: "Quản trị mạng & Hệ thống (Network / System)",
   SECURITY_AN_NINH: "An ninh mạng & Bảo mật (Security)",
   INFRASTRUCTURE_CLOUD: "Hạ tầng IT & Cloud / Máy chủ",
   IT_MANAGEMENT: "Trưởng phòng & Quản lý IT (IT Manager)",
