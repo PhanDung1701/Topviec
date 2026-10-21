@@ -4,10 +4,10 @@ TopViec AI là ứng dụng tổng hợp việc làm IT, lọc tin còn hạn, g
 
 ## Kiến trúc dữ liệu
 
-- **Nguồn truy vấn trực tiếp:** TopCV, CareerViet, CareerLink. Next.js tải và chuẩn hóa dữ liệu từ trang nguồn khi người dùng tìm kiếm hoặc làm mới.
-- **Nguồn snapshot:** VietnamWorks, Vieclam24h, JobsGO, Joboko, Indeed. Dữ liệu được đọc từ `src/data/mockJobs.ts`, do crawler định kỳ cập nhật.
+- **8 nguồn truy vấn trực tiếp:** TopCV, VietnamWorks, Vieclam24h, CareerViet, JobsGO, CareerLink, Joboko và Indeed. Next.js tải và chuẩn hóa dữ liệu từ trang nguồn khi người dùng tìm kiếm hoặc làm mới.
+- **Dữ liệu dự phòng:** `src/data/mockJobs.ts` lưu lần đồng bộ gần nhất và chỉ được dùng khi một nguồn tạm thời không phản hồi hoặc chặn truy vấn tự động.
 - **Crawler Python tùy chọn:** FastAPI + Scrapling dùng để làm giàu chi tiết việc làm và cập nhật snapshot. Trên production, service này phải được deploy riêng.
-- **Fallback:** Nếu crawler Python không khả dụng, Next.js vẫn truy vấn 3 nguồn trực tiếp và phục vụ snapshot gần nhất.
+- **Fallback:** Nếu crawler Python không khả dụng, Next.js vẫn tự truy vấn trực tiếp cả 8 nguồn; snapshot gần nhất chỉ bảo đảm giao diện không bị trống khi nguồn ngoài lỗi.
 
 ## Công nghệ
 
@@ -63,7 +63,7 @@ npm run scrapling:schedule
 
 ## API chính
 
-- `GET /api/jobs`: trả danh sách việc làm và metadata phân biệt nguồn trực tiếp/snapshot.
+- `GET /api/jobs`: truy vấn song song 8 nguồn và trả danh sách việc làm cùng metadata về kết quả trực tiếp/dự phòng.
 - `POST /api/jobs`: làm mới dữ liệu thật; nếu crawler service được cấu hình, endpoint cũng kích hoạt service đó.
 - `GET /api/jobs/detail`: lấy và làm giàu chi tiết một tin tuyển dụng.
 - `POST /api/cv/extract`: trích xuất văn bản từ CV PDF, DOCX hoặc TXT, tối đa 10 MB.
@@ -78,7 +78,7 @@ npm run scrapling:schedule
 3. Cấu hình `CRAWLER_API_URL` và `CRAWLER_API_TOKEN` trên cả hai phía.
 4. `vercel.json` chạy cron mỗi ngày, phù hợp giới hạn Vercel Hobby.
 
-Filesystem của Vercel không phải kho lưu trữ lâu dài. Crawler Python cần dùng storage/database bền vững hoặc cập nhật snapshot trong quá trình CI nếu muốn dữ liệu 5 nguồn tồn tại qua các lần deploy.
+Filesystem của Vercel không phải kho lưu trữ lâu dài. Nếu cần duy trì dữ liệu dự phòng qua nhiều lần deploy, crawler Python phải dùng storage/database bền vững hoặc cập nhật snapshot trong quá trình CI.
 
 ### Self-host
 

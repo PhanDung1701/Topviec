@@ -390,11 +390,11 @@ export default function HomePage() {
             </h1>
 
             <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300">
-              Tổng hợp dữ liệu ngành Công nghệ thông tin từ 8 nền tảng; truy vấn trực tiếp 3 nguồn:{" "}
+              Tổng hợp dữ liệu ngành Công nghệ thông tin và truy vấn trực tiếp cả 8 nguồn:{" "}
               <strong className="text-slate-900 dark:text-white">
-                TopCV, CareerViet, CareerLink
+                TopCV, VietnamWorks, Vieclam24h, CareerViet, JobsGO, CareerLink, Joboko và Indeed
               </strong>
-              {" "}và dùng dữ liệu đã đồng bộ cho VietnamWorks, Vieclam24h, JobsGO, Joboko, Indeed.
+              . Dữ liệu đồng bộ gần nhất chỉ được dùng làm dự phòng khi nguồn tạm thời không phản hồi.
             </p>
 
             {/* Key Quality Assurances (Requirements 1, 2, 3) */}
@@ -435,7 +435,7 @@ export default function HomePage() {
                 </span>
                 <div className="text-left">
                   <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                    <span>⚡ Chế độ kết hợp: nguồn trực tiếp và dữ liệu đã đồng bộ</span>
+                    <span>⚡ Chế độ trực tiếp: truy vấn song song cả 8 nguồn</span>
                     {isLiveLoading && (
                       <span className="animate-pulse text-[11px] text-emerald-600 font-bold">
                         (Đang truy vấn dữ liệu mới...)
@@ -443,7 +443,7 @@ export default function HomePage() {
                     )}
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Truy vấn trực tiếp TopCV, CareerViet, CareerLink ({liveJobCount} tin live) • Làm mới lúc: <strong>{lastSyncTime}</strong>
+                    Đã truy vấn trực tiếp 8 nền tảng ({liveJobCount} tin mới) • Làm mới lúc: <strong>{lastSyncTime}</strong>
                   </p>
                 </div>
               </div>
@@ -585,7 +585,7 @@ export default function HomePage() {
                   </span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>{liveJobCount > 0 ? `${liveJobCount} tin live` : "Dữ liệu đồng bộ"}</span>
+                    <span>{liveJobCount > 0 ? `${liveJobCount} tin trực tiếp` : "Đang dùng dữ liệu dự phòng"}</span>
                   </span>
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">

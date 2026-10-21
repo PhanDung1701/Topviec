@@ -20,7 +20,16 @@ import { INITIAL_CRAWLER_STATUSES } from "@/data/mockCrawlers";
 import { PLATFORM_CONFIGS } from "@/utils/platforms";
 import { formatTimeAgo, generateFingerprint } from "@/utils/formatters";
 
-const LIVE_SOURCES = new Set<PlatformSource>(["TOPCV", "CAREERVIET", "CAREERLINK"]);
+const LIVE_SOURCES = new Set<PlatformSource>([
+  "TOPCV",
+  "VIETNAMWORKS",
+  "VIECLAM24H",
+  "CAREERVIET",
+  "JOBSGO",
+  "CAREERLINK",
+  "JOBOKO",
+  "INDEED",
+]);
 
 interface SyncResponse {
   success: boolean;
@@ -118,11 +127,7 @@ export const CrawlerDashboard: React.FC = () => {
         platform: platformKey,
         level: "SUCCESS",
         message: `[${PLATFORM_CONFIGS[platformKey].name}] đã nạp ${count} tin hiện có.`,
-        details: LIVE_SOURCES.has(platformKey)
-          ? "Nguồn được truy vấn trực tiếp từ trang tuyển dụng."
-          : data.crawlerService?.triggered
-            ? "Đã gửi yêu cầu tới crawler service ngoài."
-            : "Nguồn này đang dùng dữ liệu snapshot gần nhất.",
+        details: "Nguồn được truy vấn trực tiếp từ trang tuyển dụng; dữ liệu gần nhất chỉ dùng khi nguồn không phản hồi.",
       };
       setLogs((prev) => [newLog, ...prev]);
     } catch (error) {
@@ -158,8 +163,8 @@ export const CrawlerDashboard: React.FC = () => {
         level: "SUCCESS",
         message: `Đã nạp ${total} tin từ 8 nguồn.`,
         details: data.crawlerService?.triggered
-          ? "Crawler service ngoài đã được kích hoạt."
-          : "3 nguồn được truy vấn trực tiếp; 5 nguồn còn lại dùng snapshot.",
+          ? "Crawler service ngoài đã được kích hoạt; cả 8 nguồn cũng được truy vấn trực tiếp."
+          : "Cả 8 nguồn đã được truy vấn trực tiếp bằng adapter tích hợp.",
       };
       setLogs((prev) => [newLog, ...prev]);
     } catch (error) {
@@ -180,7 +185,6 @@ export const CrawlerDashboard: React.FC = () => {
   const liveJobs = crawlers
     .filter((crawler) => LIVE_SOURCES.has(crawler.platform))
     .reduce((acc, crawler) => acc + crawler.totalActiveJobs, 0);
-  const snapshotJobs = totalJobs - liveJobs;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-16">
@@ -206,7 +210,7 @@ export const CrawlerDashboard: React.FC = () => {
                 TopViec IT • Crawler & Scraper Manager
               </h1>
               <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 dark:bg-emerald-950 dark:text-emerald-300">
-                3 live • 5 snapshot
+                8 nguồn trực tiếp
               </span>
             </div>
           </div>
@@ -247,7 +251,7 @@ export const CrawlerDashboard: React.FC = () => {
               {liveJobs.toLocaleString()} tin
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              TopCV, CareerViet và CareerLink
+              Tổng hợp từ cả 8 nền tảng
             </div>
           </div>
 
@@ -257,7 +261,7 @@ export const CrawlerDashboard: React.FC = () => {
               <CalendarCheck className="h-4 w-4 text-rose-500" />
             </div>
             <div className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">
-              3 / 8 nguồn
+              8 / 8 nguồn
             </div>
             <div className="text-[11px] text-emerald-600 font-semibold mt-1">
               Làm mới theo yêu cầu và qua cron
@@ -266,14 +270,14 @@ export const CrawlerDashboard: React.FC = () => {
 
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-              <span>Tin từ dữ liệu snapshot</span>
+              <span>Cơ chế dự phòng</span>
               <Layers className="h-4 w-4 text-purple-600" />
             </div>
             <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-2">
-              {snapshotJobs.toLocaleString()} tin
+              Tự động
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              5 nguồn được nạp từ lần đồng bộ gần nhất
+              Chỉ dùng dữ liệu gần nhất khi nguồn không phản hồi
             </div>
           </div>
         </div>
@@ -370,7 +374,7 @@ export const CrawlerDashboard: React.FC = () => {
                     className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 disabled:opacity-50 transition"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                    <span>{isSyncing ? "Đang làm mới..." : LIVE_SOURCES.has(crawler.platform) ? "Truy vấn lại" : "Nạp lại snapshot"}</span>
+                    <span>{isSyncing ? "Đang làm mới..." : "Truy vấn lại"}</span>
                   </button>
                 </div>
               );

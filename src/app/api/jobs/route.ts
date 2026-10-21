@@ -56,6 +56,9 @@ export async function GET(request: Request) {
     snapshotSources: liveResult.snapshotSources,
     liveJobCount: liveResult.liveJobCount,
     snapshotJobCount: liveResult.snapshotJobCount,
+    fallbackJobCount: liveResult.snapshotJobCount,
+    directSourcesBreakdown: liveResult.directSourcesBreakdown,
+    directSourcesWithResults: liveResult.directSourcesWithResults,
     timestamp: new Date().toISOString(),
   });
 }
@@ -81,13 +84,15 @@ export async function POST(request: Request) {
       success: true,
       message: platform
         ? `Đã làm mới dữ liệu nguồn ${platform}.`
-        : "Đã làm mới 3 nguồn trực tiếp và nạp lại dữ liệu đã đồng bộ của 5 nguồn còn lại.",
+        : "Đã truy vấn trực tiếp và làm mới cả 8 nguồn tuyển dụng.",
       syncedAt: new Date().toISOString(),
       crawledCount,
       totalCount: liveResult.total,
       sourcesBreakdown: liveResult.sources,
       liveSources: liveResult.liveSources,
       snapshotSources: liveResult.snapshotSources,
+      directSourcesBreakdown: liveResult.directSourcesBreakdown,
+      directSourcesWithResults: liveResult.directSourcesWithResults,
       crawlerService: {
         configured: crawlerResult.configured,
         triggered: crawlerResult.ok,

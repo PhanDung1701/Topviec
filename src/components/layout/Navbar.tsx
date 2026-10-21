@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </div>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:block">
-                3 nguồn trực tiếp • 5 nguồn đã đồng bộ
+                8 nguồn truy vấn trực tiếp
               </p>
             </div>
           </Link>

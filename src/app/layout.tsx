@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "TopViec AI - Nền Tảng Tổng Hợp Việc Làm & Khớp CV Thông Minh Việt Nam",
   description:
-    "Hệ thống tổng hợp việc làm từ 8 nền tảng, truy vấn trực tiếp TopCV, CareerViet và CareerLink, kết hợp dữ liệu đã đồng bộ từ 5 nguồn còn lại. Khớp CV và phân tích kỹ năng.",
+    "Hệ thống tổng hợp việc làm và truy vấn trực tiếp 8 nền tảng: TopCV, VietnamWorks, Vieclam24h, CareerViet, JobsGO, CareerLink, Joboko và Indeed. Khớp CV và phân tích kỹ năng.",
   keywords: [
     "tìm việc làm",
     "topcv",

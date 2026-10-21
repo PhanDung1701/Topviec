@@ -4,17 +4,16 @@ import { MOCK_JOBS } from "@/data/mockJobs";
 
 export const LIVE_PLATFORM_SOURCES: PlatformSource[] = [
   "TOPCV",
-  "CAREERVIET",
-  "CAREERLINK",
-];
-
-export const SNAPSHOT_PLATFORM_SOURCES: PlatformSource[] = [
   "VIETNAMWORKS",
   "VIECLAM24H",
+  "CAREERVIET",
   "JOBSGO",
+  "CAREERLINK",
   "JOBOKO",
   "INDEED",
 ];
+
+export const SNAPSHOT_PLATFORM_SOURCES: PlatformSource[] = [];
 
 // ==========================================
 // 1. BỘ TỪ KHÓA MỤC TIÊU & LOẠI TRỪ NGHIÊM NGẶT
@@ -163,6 +162,244 @@ function getSkills(title: string): string[] {
   if (t.includes("hardware") || t.includes("phần cứng")) skills.push("Hardware", "Desktop Support");
   if (skills.length === 0) skills.push("IT Support", "System Admin", "Networking");
   return Array.from(new Set(skills));
+}
+
+const DEFAULT_COMPANY_LOGO = "https://cdn-icons-png.flaticon.com/512/1006/1006771.png";
+
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord | null {
+  return typeof value === "object" && value !== null ? value as UnknownRecord : null;
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function stripHtml(value: string): string {
+  return decodeHtml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+}
+
+function directJob(input: {
+  platform: PlatformSource;
+  id: string | number;
+  title: string;
+  company?: string;
+  logo?: string;
+  city?: string;
+  salaryText?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  url: string;
+  postedAt?: string;
+  expiresAt?: string;
+}): JobListing {
+  const now = new Date();
+  const company = input.company || "Doanh nghiệp IT";
+  const city = input.city || "Toàn quốc";
+  const sourceId = `${input.platform}-${input.id}`;
+  return {
+    id: sourceId.toLowerCase(),
+    title: input.title,
+    company_name: company,
+    company_logo: input.logo || DEFAULT_COMPANY_LOGO,
+    location_city: city,
+    location_district: "",
+    address_detail: `${city}, Việt Nam`,
+    salary_min: input.salaryMin || 0,
+    salary_max: input.salaryMax || 0,
+    salary_currency: "VND",
+    salary_raw_text: input.salaryText || "Thỏa thuận",
+    description: `${company} đang tuyển dụng ${input.title}. Xem nội dung cập nhật trực tiếp tại trang tuyển dụng gốc.`,
+    requirements: ["Xem yêu cầu chi tiết và thông tin ứng tuyển tại tin đăng gốc."],
+    benefits: ["Quyền lợi được cập nhật trực tiếp bởi nhà tuyển dụng."],
+    skills_tags: getSkills(input.title),
+    job_type: "FULL_TIME",
+    experience_level: input.title.toLowerCase().includes("senior") ? "SENIOR" : "MIDDLE",
+    industry: "Công nghệ thông tin",
+    it_subfield: getItSubfield(input.title),
+    source_platform: input.platform,
+    source_url: input.url,
+    source_job_id: sourceId,
+    fingerprint_hash: generateFingerprint(input.title, company, city),
+    posted_at: input.postedAt || now.toISOString(),
+    crawled_at: now.toISOString(),
+    expires_at: input.expiresAt || new Date(now.getTime() + 30 * 86400000).toISOString(),
+    is_active: true,
+    is_expired: false,
+    update_time_text: "Truy vấn trực tiếp",
+  };
+}
+
+function absoluteUrl(baseUrl: string, value: string): string {
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
+async function fetchDirectHtml(url: string): Promise<string> {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+      "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
+}
+
+function parseSearchAnchors(
+  html: string,
+  platform: PlatformSource,
+  baseUrl: string,
+  urlPattern: RegExp,
+): JobListing[] {
+  const jobs: JobListing[] = [];
+  const seen = new Set<string>();
+  const anchorPattern = /<a\b([^>]*?)href=["']([^"']+)["']([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = anchorPattern.exec(html)) !== null && jobs.length < 30) {
+    const href = decodeHtml(match[2]);
+    if (!urlPattern.test(href)) continue;
+    urlPattern.lastIndex = 0;
+    const attributes = `${match[1]} ${match[3]}`;
+    const titleAttribute = attributes.match(/title=["']([^"']+)["']/i)?.[1] || "";
+    const title = stripHtml(titleAttribute || match[4]);
+    if (!title || title.length < 4 || !isStrictlyITJob(title)) continue;
+    const url = absoluteUrl(baseUrl, href.split("?")[0]);
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const id = href.match(/(?:xvi|id|job-|[-/])(\d{4,})/i)?.[1] || generateFingerprint(title, platform, url).slice(0, 12);
+    jobs.push(directJob({ platform, id, title, url }));
+  }
+  return jobs;
+}
+
+export async function fetchLiveVietnamWorks(keyword: string): Promise<JobListing[]> {
+  try {
+    const response = await fetch("https://ms.vietnamworks.com/job-search/v1.0/search", {
+      method: "POST",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: keyword.trim() || "it support", filter: [], ranges: [], order: [], hitsPerPage: 30, page: 0 }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) return [];
+    const payload = asRecord(await response.json());
+    const items = payload && Array.isArray(payload.data) ? payload.data : [];
+    return items.flatMap((value) => {
+      const item = asRecord(value);
+      if (!item) return [];
+      const title = asString(item.jobTitle);
+      const url = asString(item.jobUrl);
+      if (!title || !url || !isStrictlyITJob(title)) return [];
+      return [directJob({
+        platform: "VIETNAMWORKS",
+        id: asString(item.jobId, String(item.jobId ?? "unknown")),
+        title,
+        company: asString(item.companyName),
+        logo: asString(item.companyLogo),
+        city: asString(item.locationDesc, "Toàn quốc"),
+        salaryText: asString(item.prettySalary, "Thỏa thuận"),
+        url,
+        postedAt: asString(item.approvedOn),
+        expiresAt: asString(item.expiredOn),
+      })];
+    });
+  } catch (error) {
+    console.warn("Live VietnamWorks fetch error:", error);
+    return [];
+  }
+}
+
+export async function fetchLiveVieclam24h(keyword: string): Promise<JobListing[]> {
+  try {
+    const query = keyword.trim() || "it support";
+    const html = await fetchDirectHtml(`https://vieclam24h.vn/tim-kiem-viec-lam-nhanh?keyword=${encodeURIComponent(query)}`);
+    const marker = html.indexOf('__NEXT_DATA__');
+    const start = html.indexOf(">", marker) + 1;
+    const end = html.indexOf("</script>", start);
+    if (marker < 0 || start <= 0 || end < 0) return [];
+    const root = asRecord(JSON.parse(html.slice(start, end)));
+    const props = asRecord(root?.props);
+    const initialState = asRecord(props?.initialState);
+    const api = asRecord(initialState?.api);
+    const getJobList = asRecord(api?.getJobList);
+    const data = asRecord(getJobList?.data);
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return items.flatMap((value) => {
+      const item = asRecord(value);
+      if (!item) return [];
+      const title = asString(item.title);
+      if (!isStrictlyITJob(title)) return [];
+      const employer = asRecord(item.employer_info);
+      const id = String(item.id ?? "unknown");
+      const salaryMin = asNumber(item.salary_min) / 1_000_000;
+      const salaryMax = asNumber(item.salary_max) / 1_000_000;
+      const salaryText = salaryMin > 0 ? `${salaryMin} - ${salaryMax || salaryMin} triệu` : "Thỏa thuận";
+      const occupation = Array.isArray(item.occupation_ids_main) ? String(item.occupation_ids_main[0] ?? 0) : "0";
+      const province = Array.isArray(item.province_ids) ? String(item.province_ids[0] ?? 0) : "0";
+      return [directJob({
+        platform: "VIECLAM24H",
+        id,
+        title,
+        company: asString(employer?.name),
+        logo: asString(employer?.logo),
+        salaryMin,
+        salaryMax,
+        salaryText,
+        url: `https://vieclam24h.vn/${asString(item.title_slug, "viec-lam")}-c${occupation}p${province}id${id}.html`,
+        postedAt: asNumber(item.created_at) ? new Date(asNumber(item.created_at) * 1000).toISOString() : undefined,
+      })];
+    });
+  } catch (error) {
+    console.warn("Live Vieclam24h fetch error:", error);
+    return [];
+  }
+}
+
+export async function fetchLiveJobsGo(keyword: string): Promise<JobListing[]> {
+  try {
+    const html = await fetchDirectHtml(`https://jobsgo.vn/viec-lam.html?keyword=${encodeURIComponent(keyword.trim() || "it support")}`);
+    return parseSearchAnchors(html, "JOBSGO", "https://jobsgo.vn", /\/viec-lam\/[^"]+\.html/i);
+  } catch (error) {
+    console.warn("Live JobsGO fetch error:", error);
+    return [];
+  }
+}
+
+export async function fetchLiveJoboko(keyword: string): Promise<JobListing[]> {
+  try {
+    const slug = removeVietnameseTones(keyword.trim() || "it support").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const html = await fetchDirectHtml(`https://vn.joboko.com/tim-viec-lam-${slug}`);
+    return parseSearchAnchors(html, "JOBOKO", "https://vn.joboko.com", /\/viec-lam-[^"']+-xvi\d+/i);
+  } catch (error) {
+    console.warn("Live Joboko fetch error:", error);
+    return [];
+  }
+}
+
+export async function fetchLiveIndeed(keyword: string): Promise<JobListing[]> {
+  try {
+    const html = await fetchDirectHtml(`https://vn.indeed.com/jobs?q=${encodeURIComponent(keyword.trim() || "it support")}`);
+    return parseSearchAnchors(html, "INDEED", "https://vn.indeed.com", /\/(?:viewjob|rc\/clk)[^"']*/i);
+  } catch (error) {
+    console.warn("Live Indeed fetch error:", error);
+    return [];
+  }
 }
 
 // ==========================================
@@ -805,10 +1042,12 @@ export async function getLiveRealtimeJobs(keyword: string = ""): Promise<{
   snapshotSources: PlatformSource[];
   liveJobCount: number;
   snapshotJobCount: number;
+  directSourcesBreakdown: Record<PlatformSource, number>;
+  directSourcesWithResults: PlatformSource[];
 }> {
   const normKey = removeVietnameseTones(keyword).toLowerCase().trim();
 
-  // 1. Fetch live in parallel from TopCV, CareerViet, and CareerLink directly from source
+  // Fetch all eight platforms in parallel directly from their source pages/APIs.
   // If keyword is specified, query external sources directly with that keyword!
   // If empty, query primary target IT keywords so initial page load has rich, real-time jobs
   const livePromises: Promise<JobListing[]>[] = [];
@@ -816,27 +1055,51 @@ export async function getLiveRealtimeJobs(keyword: string = ""): Promise<{
   if (keyword && keyword.trim()) {
     livePromises.push(
       fetchLiveTopCV(keyword),
+      fetchLiveVietnamWorks(keyword),
+      fetchLiveVieclam24h(keyword),
       fetchLiveCareerViet(keyword),
-      fetchLiveCareerLink(keyword)
+      fetchLiveJobsGo(keyword),
+      fetchLiveCareerLink(keyword),
+      fetchLiveJoboko(keyword),
+      fetchLiveIndeed(keyword),
     );
   } else {
-    // Initial load: fetch multiple target keywords in parallel
+    // Initial load uses one broad IT query per platform to keep request time bounded.
     livePromises.push(
       fetchLiveTopCV("it support"),
-      fetchLiveTopCV("system admin"),
+      fetchLiveVietnamWorks("it support"),
+      fetchLiveVieclam24h("it support"),
       fetchLiveCareerViet("it support"),
-      fetchLiveCareerViet("network"),
+      fetchLiveJobsGo("it support"),
       fetchLiveCareerLink("it support"),
-      fetchLiveCareerLink("helpdesk")
+      fetchLiveJoboko("it support"),
+      fetchLiveIndeed("it support"),
     );
   }
 
   const liveResults = await Promise.allSettled(livePromises);
+  const directSourcesBreakdown: Record<PlatformSource, number> = {
+    TOPCV: 0,
+    VIETNAMWORKS: 0,
+    VIECLAM24H: 0,
+    CAREERVIET: 0,
+    JOBSGO: 0,
+    CAREERLINK: 0,
+    JOBOKO: 0,
+    INDEED: 0,
+  };
+  liveResults.forEach((result, index) => {
+    const source = LIVE_PLATFORM_SOURCES[index];
+    if (source && result.status === "fulfilled") {
+      directSourcesBreakdown[source] = result.value.length;
+    }
+  });
 
   // Master map for deduplication
   const masterMap = new Map<string, JobListing>();
 
-  // Curated database for other platforms (VietnamWorks, JobsGO, Vieclam24h, Indeed, Joboko)
+  // Keep the synchronized dataset only as a resilience fallback. Fresh direct
+  // results always replace matching records and are counted separately below.
   for (const j of MOCK_JOBS) {
     if (isStrictlyITJob(j.title)) {
       masterMap.set(j.fingerprint_hash, j);
@@ -904,6 +1167,8 @@ export async function getLiveRealtimeJobs(keyword: string = ""): Promise<{
     snapshotSources: SNAPSHOT_PLATFORM_SOURCES,
     liveJobCount,
     snapshotJobCount: allJobs.length - liveJobCount,
+    directSourcesBreakdown,
+    directSourcesWithResults: LIVE_PLATFORM_SOURCES.filter((source) => directSourcesBreakdown[source] > 0),
   };
 }
 
