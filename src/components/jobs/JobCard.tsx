@@ -3,7 +3,6 @@
 import React from "react";
 import {
   MapPin,
-  Clock,
   ExternalLink,
   Bookmark,
   BookmarkCheck,
@@ -38,7 +37,6 @@ interface JobCardProps {
 export const JobCard: React.FC<JobCardProps> = ({
   job,
   matchAnalysis,
-  activeCV,
   onSelectJob,
   onOpenMatchBreakdown,
   isSaved = false,
@@ -75,6 +73,8 @@ export const JobCard: React.FC<JobCardProps> = ({
           {/* Company Logo */}
           <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
             {job.company_logo ? (
+              // Logos come from arbitrary crawler sources, so Next Image cannot use a safe host allow-list.
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={job.company_logo}
                 alt={job.company_name}

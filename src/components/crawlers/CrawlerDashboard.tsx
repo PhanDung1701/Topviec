@@ -1,18 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Activity,
   RefreshCw,
   Layers,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
   Terminal,
-  ShieldCheck,
   ChevronLeft,
-  Search,
   Hash,
   Database,
   ArrowUpRight,
@@ -20,13 +16,38 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { CrawlerLogEntry, CrawlerStatus, PlatformSource } from "@/types/job";
-import { INITIAL_CRAWLER_LOGS, INITIAL_CRAWLER_STATUSES } from "@/data/mockCrawlers";
+import { INITIAL_CRAWLER_STATUSES } from "@/data/mockCrawlers";
 import { PLATFORM_CONFIGS } from "@/utils/platforms";
 import { formatTimeAgo, generateFingerprint } from "@/utils/formatters";
 
+const LIVE_SOURCES = new Set<PlatformSource>(["TOPCV", "CAREERVIET", "CAREERLINK"]);
+
+interface SyncResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  syncedAt?: string;
+  sourcesBreakdown?: Partial<Record<PlatformSource, number>>;
+  crawlerService?: {
+    configured: boolean;
+    triggered: boolean;
+    error?: string;
+  };
+}
+
+const EMPTY_CRAWLERS: CrawlerStatus[] = INITIAL_CRAWLER_STATUSES.map((crawler) => ({
+  ...crawler,
+  status: "IDLE",
+  lastSync: "",
+  newJobsPastHour: 0,
+  deduplicatedCount: 0,
+  totalActiveJobs: 0,
+  healthPercent: 0,
+}));
+
 export const CrawlerDashboard: React.FC = () => {
-  const [crawlers, setCrawlers] = useState<CrawlerStatus[]>(INITIAL_CRAWLER_STATUSES);
-  const [logs, setLogs] = useState<CrawlerLogEntry[]>(INITIAL_CRAWLER_LOGS);
+  const [crawlers, setCrawlers] = useState<CrawlerStatus[]>(EMPTY_CRAWLERS);
+  const [logs, setLogs] = useState<CrawlerLogEntry[]>([]);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncingPlatform, setSyncingPlatform] = useState<PlatformSource | null>(null);
 
@@ -37,92 +58,129 @@ export const CrawlerDashboard: React.FC = () => {
 
   const computedHash = generateFingerprint(testTitle, testCompany, testCity);
 
+  const applySyncResult = useCallback((data: SyncResponse, platform?: PlatformSource) => {
+    const syncedAt = data.syncedAt || new Date().toISOString();
+    setCrawlers((previous) =>
+      previous.map((crawler) => {
+        if (platform && crawler.platform !== platform) return crawler;
+        const count = data.sourcesBreakdown?.[crawler.platform] ?? crawler.totalActiveJobs;
+        return {
+          ...crawler,
+          status: count > 0 ? "ACTIVE" : "IDLE",
+          lastSync: syncedAt,
+          newJobsPastHour: count,
+          totalActiveJobs: count,
+          healthPercent: count > 0 ? 100 : 0,
+        };
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadStatus = async () => {
+      try {
+        const response = await fetch("/api/jobs", { signal: controller.signal });
+        const data = (await response.json()) as SyncResponse;
+        if (!response.ok || !data.success) throw new Error(data.error || "Không thể tải trạng thái");
+        applySyncResult({ ...data, syncedAt: new Date().toISOString() });
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setLogs([{
+          id: `load-error-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          platform: "TOPCV",
+          level: "ERROR",
+          message: error instanceof Error ? error.message : "Không thể tải trạng thái crawler",
+        }]);
+      }
+    };
+    void loadStatus();
+    return () => controller.abort();
+  }, [applySyncResult]);
+
   // Trigger sync for a specific platform
-  const handleTriggerSync = (platformKey: PlatformSource) => {
+  const handleTriggerSync = async (platformKey: PlatformSource) => {
     setSyncingPlatform(platformKey);
-
-    setTimeout(() => {
-      const addedJobs = Math.floor(Math.random() * 25) + 10;
-      const deduplicated = Math.floor(Math.random() * 6) + 1;
-
-      // Update crawler status
-      setCrawlers((prev) =>
-        prev.map((c) => {
-          if (c.platform === platformKey) {
-            return {
-              ...c,
-              status: "ACTIVE",
-              lastSync: new Date().toISOString(),
-              newJobsPastHour: c.newJobsPastHour + addedJobs,
-              deduplicatedCount: c.deduplicatedCount + deduplicated,
-              totalActiveJobs: c.totalActiveJobs + addedJobs,
-            };
-          }
-          return c;
-        })
-      );
-
-      // Add log
+    try {
+      const response = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: platformKey }),
+      });
+      const data = (await response.json()) as SyncResponse;
+      if (!response.ok || !data.success) throw new Error(data.error || "Đồng bộ thất bại");
+      applySyncResult(data, platformKey);
+      const count = data.sourcesBreakdown?.[platformKey] ?? 0;
       const newLog: CrawlerLogEntry = {
         id: `log-${Date.now()}`,
-        timestamp: new Date().toISOString(),
+        timestamp: data.syncedAt || new Date().toISOString(),
         platform: platformKey,
         level: "SUCCESS",
-        message: `[${PLATFORM_CONFIGS[platformKey].name}] Hoàn tất đồng bộ thủ công: +${addedJobs} việc làm mới, ${deduplicated} tin trùng đã gộp mã vân tay.`,
-        details: `Tốc độ: 52 jobs/sec • Khớp fingerprint hash 100% không trùng lặp.`,
+        message: `[${PLATFORM_CONFIGS[platformKey].name}] đã nạp ${count} tin hiện có.`,
+        details: LIVE_SOURCES.has(platformKey)
+          ? "Nguồn được truy vấn trực tiếp từ trang tuyển dụng."
+          : data.crawlerService?.triggered
+            ? "Đã gửi yêu cầu tới crawler service ngoài."
+            : "Nguồn này đang dùng dữ liệu snapshot gần nhất.",
       };
-
       setLogs((prev) => [newLog, ...prev]);
+    } catch (error) {
+      setLogs((prev) => [{
+        id: `log-error-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        platform: platformKey,
+        level: "ERROR",
+        message: error instanceof Error ? error.message : "Đồng bộ thất bại",
+      }, ...prev]);
+    } finally {
       setSyncingPlatform(null);
-    }, 1200);
+    }
   };
 
   // Trigger sync all
-  const handleSyncAll = () => {
+  const handleSyncAll = async () => {
     setIsSyncingAll(true);
-
-    setTimeout(() => {
-      let totalNew = 0;
-      let totalDedup = 0;
-
-      setCrawlers((prev) =>
-        prev.map((c) => {
-          const added = Math.floor(Math.random() * 20) + 12;
-          const dedup = Math.floor(Math.random() * 5) + 1;
-          totalNew += added;
-          totalDedup += dedup;
-          return {
-            ...c,
-            lastSync: new Date().toISOString(),
-            newJobsPastHour: c.newJobsPastHour + added,
-            deduplicatedCount: c.deduplicatedCount + dedup,
-            totalActiveJobs: c.totalActiveJobs + added,
-            status: "ACTIVE",
-          };
-        })
-      );
-
+    try {
+      const response = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = (await response.json()) as SyncResponse;
+      if (!response.ok || !data.success) throw new Error(data.error || "Đồng bộ thất bại");
+      applySyncResult(data);
+      const total = Object.values(data.sourcesBreakdown ?? {}).reduce((sum, value) => sum + (value ?? 0), 0);
       const newLog: CrawlerLogEntry = {
         id: `log-all-${Date.now()}`,
-        timestamp: new Date().toISOString(),
+        timestamp: data.syncedAt || new Date().toISOString(),
         platform: "TOPCV",
         level: "SUCCESS",
-        message: `ĐỒNG BỘ TOÀN BỘ 8 NGUỒN THÀNH CÔNG: Tổng cộng +${totalNew} việc làm mới được lưu, +${totalDedup} tin đăng trùng đã gộp.`,
-        details: "TopCV, VietnamWorks, Vieclam24h, CareerViet, JobsGO, CareerLink, Joboko, Indeed đều ở trạng thái ACTIVE (100%).",
+        message: `Đã nạp ${total} tin từ 8 nguồn.`,
+        details: data.crawlerService?.triggered
+          ? "Crawler service ngoài đã được kích hoạt."
+          : "3 nguồn được truy vấn trực tiếp; 5 nguồn còn lại dùng snapshot.",
       };
-
       setLogs((prev) => [newLog, ...prev]);
+    } catch (error) {
+      setLogs((prev) => [{
+        id: `log-all-error-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        platform: "TOPCV",
+        level: "ERROR",
+        message: error instanceof Error ? error.message : "Đồng bộ thất bại",
+      }, ...prev]);
+    } finally {
       setIsSyncingAll(false);
-    }, 2000);
+    }
   };
 
   // Aggregate stats
   const totalJobs = crawlers.reduce((acc, c) => acc + c.totalActiveJobs, 0);
-  const totalNewHourly = crawlers.reduce((acc, c) => acc + c.newJobsPastHour, 0);
-  const totalDeduplicated = crawlers.reduce((acc, c) => acc + c.deduplicatedCount, 0);
-  const avgHealth = (
-    crawlers.reduce((acc, c) => acc + c.healthPercent, 0) / crawlers.length
-  ).toFixed(1);
+  const liveJobs = crawlers
+    .filter((crawler) => LIVE_SOURCES.has(crawler.platform))
+    .reduce((acc, crawler) => acc + crawler.totalActiveJobs, 0);
+  const snapshotJobs = totalJobs - liveJobs;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-16">
@@ -148,7 +206,7 @@ export const CrawlerDashboard: React.FC = () => {
                 TopViec IT • Crawler & Scraper Manager
               </h1>
               <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 dark:bg-emerald-950 dark:text-emerald-300">
-                100% IT Pipeline Active
+                3 live • 5 snapshot
               </span>
             </div>
           </div>
@@ -159,7 +217,7 @@ export const CrawlerDashboard: React.FC = () => {
             className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-indigo-600/30 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 transition"
           >
             <RefreshCw className={`h-4 w-4 ${isSyncingAll ? "animate-spin" : ""}`} />
-            <span>{isSyncingAll ? "Đang đồng bộ 8 nguồn IT..." : "Chạy Đồng Bộ Toàn Bộ IT (Trigger All)"}</span>
+            <span>{isSyncingAll ? "Đang làm mới dữ liệu..." : "Làm Mới Toàn Bộ Nguồn"}</span>
           </button>
         </div>
       </div>
@@ -182,40 +240,40 @@ export const CrawlerDashboard: React.FC = () => {
 
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-              <span>Việc làm IT mới lấy về (1 giờ)</span>
+              <span>Tin từ nguồn truy vấn trực tiếp</span>
               <Clock className="h-4 w-4 text-blue-600" />
             </div>
             <div className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-2">
-              +{totalNewHourly.toLocaleString()} tin
+              {liveJobs.toLocaleString()} tin
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              Chu kỳ cào: 60 phút/lần từ 8 sàn
+              TopCV, CareerViet và CareerLink
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-              <span>Tin hết hạn đã lọc bỏ (&gt; 1 tháng)</span>
+              <span>Nguồn truy vấn trực tiếp</span>
               <CalendarCheck className="h-4 w-4 text-rose-500" />
             </div>
             <div className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-2">
-              1,840 tin
+              3 / 8 nguồn
             </div>
             <div className="text-[11px] text-emerald-600 font-semibold mt-1">
-              ✓ Đảm bảo 100% tin còn hạn nộp hồ sơ
+              Làm mới theo yêu cầu và qua cron
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-              <span>Tin trùng lặp IT đã gộp (Deduplicated)</span>
+              <span>Tin từ dữ liệu snapshot</span>
               <Layers className="h-4 w-4 text-purple-600" />
             </div>
             <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-2">
-              {totalDeduplicated.toLocaleString()} tin
+              {snapshotJobs.toLocaleString()} tin
             </div>
             <div className="text-[11px] text-slate-500 mt-1">
-              Khớp mã vân tay đa nền tảng
+              5 nguồn được nạp từ lần đồng bộ gần nhất
             </div>
           </div>
         </div>
@@ -226,7 +284,7 @@ export const CrawlerDashboard: React.FC = () => {
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Zap className="h-5 w-5 text-amber-500" />
-                Tiến Trình Cào Dữ Liệu Theo Giờ (8 Nguồn)
+                Trạng Thái Nguồn Dữ Liệu (8 Nguồn)
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Theo dõi thời gian đồng bộ gần nhất, số lượng tin mới và kích hoạt cào thủ công từng nguồn
@@ -284,9 +342,9 @@ export const CrawlerDashboard: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Mới lấy (1 giờ):</span>
+                      <span className="text-slate-500">Tin hiện có:</span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                        +{crawler.newJobsPastHour} tin
+                        {crawler.newJobsPastHour} tin
                       </span>
                     </div>
 
@@ -312,7 +370,7 @@ export const CrawlerDashboard: React.FC = () => {
                     className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 disabled:opacity-50 transition"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-                    <span>{isSyncing ? "Đang cào..." : "Chạy đồng bộ ngay"}</span>
+                    <span>{isSyncing ? "Đang làm mới..." : LIVE_SOURCES.has(crawler.platform) ? "Truy vấn lại" : "Nạp lại snapshot"}</span>
                   </button>
                 </div>
               );
@@ -396,7 +454,7 @@ export const CrawlerDashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Streaming logs realtime</span>
+              <span>Nhật ký thao tác trong phiên</span>
             </div>
           </div>
 

@@ -7,9 +7,10 @@ Chạy: python crawler/api_service.py hoặc npm run scrapling:api
 import sys
 import asyncio
 import datetime
+import os
 from pathlib import Path
 from typing import Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -33,11 +34,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Kích hoạt CORS để Next.js gọi trực tiếp từ trình duyệt hoặc server
+# Chỉ cho phép các origin đã cấu hình. Next.js gọi service từ server nên không
+# cần CORS; cấu hình này chủ yếu phục vụ Swagger/local development.
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("CRAWLER_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,6 +53,11 @@ class ScrapeDetailRequest(BaseModel):
     url: str
     platform: Optional[str] = None
     use_stealth: Optional[bool] = False
+
+def verify_api_token(authorization: Optional[str] = Header(default=None)):
+    expected_token = os.getenv("CRAWLER_API_TOKEN", "").strip()
+    if expected_token and authorization != f"Bearer {expected_token}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 @app.get("/health")
 def health_check():
@@ -58,11 +70,12 @@ def health_check():
     }
 
 @app.post("/api/scrape/detail")
-async def scrape_detail_endpoint(req: ScrapeDetailRequest):
+async def scrape_detail_endpoint(req: ScrapeDetailRequest, authorization: Optional[str] = Header(default=None)):
     """
     Endpoint cào chi tiết việc làm thời gian thực.
     Next.js gọi endpoint này khi người dùng mở modal xem chi tiết.
     """
+    verify_api_token(authorization)
     if not req.url:
         raise HTTPException(status_code=400, detail="Thiếu tham số url")
 
@@ -132,8 +145,9 @@ async def startup_event():
     print(f"🕒 Đã kích hoạt bộ lập lịch tự động: Cào và cập nhật dữ liệu việc làm IT mỗi {INTERVAL_HOURS} tiếng.")
 
 @app.post("/api/crawl/run")
-def trigger_crawl(background_tasks: BackgroundTasks):
+def trigger_crawl(background_tasks: BackgroundTasks, authorization: Optional[str] = Header(default=None)):
     """Kích hoạt tiến trình cào toàn diện chạy nền ngay lập tức"""
+    verify_api_token(authorization)
     global crawl_state
     if crawl_state["is_running"]:
         return {"success": False, "message": "Tiến trình cào đang chạy dở, vui lòng đợi hoàn tất."}
@@ -142,8 +156,9 @@ def trigger_crawl(background_tasks: BackgroundTasks):
     return {"success": True, "message": "Đã bắt đầu tiến trình cào dữ liệu qua Scrapling trong nền."}
 
 @app.get("/api/crawl/status")
-def get_crawl_status():
+def get_crawl_status(authorization: Optional[str] = Header(default=None)):
     """Xem trạng thái tiến trình cào và thời gian đợt cào kế tiếp"""
+    verify_api_token(authorization)
     return crawl_state
 
 if __name__ == "__main__":

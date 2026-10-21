@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, MapPin, Building2, X, Sparkles, Navigation } from "lucide-react";
+import { Search, MapPin, X, Sparkles, Navigation } from "lucide-react";
 import { VIETNAM_LOCATIONS } from "@/utils/formatters";
 
 interface SearchBarProps {
@@ -23,7 +23,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   district,
   onDistrictChange,
   onSearchSubmit,
-  totalResultsCount,
 }) => {
   // Find districts for current selected city
   const currentLocation = VIETNAM_LOCATIONS.find((loc) => loc.city === city) || VIETNAM_LOCATIONS[0];

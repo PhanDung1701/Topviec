@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Copy, Check, Info, ExternalLink, X, Activity, ShieldCheck, Clock } from "lucide-react";
+import { Copy, Check, ExternalLink, X, Activity, ShieldCheck, Clock } from "lucide-react";
 import { APP_VERSION_CONFIG } from "@/config/version";
 
 export const VersionBadge: React.FC = () => {

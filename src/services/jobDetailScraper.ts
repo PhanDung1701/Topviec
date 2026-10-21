@@ -1,4 +1,5 @@
-import { JobListing, PlatformSource } from "@/types/job";
+import { JobListing } from "@/types/job";
+import { callCrawlerService } from "@/services/crawlerService";
 
 // In-memory cache for fast instant rendering on modal open
 const detailCache = new Map<string, JobListing>();
@@ -148,7 +149,7 @@ export async function scrapeCareerLinkDetail(
     const parsedReqs = cleanBullets(rawSkills);
 
     // 4. Job Summary / Chi tiết công việc
-    const otherInfo: Record<string, string> = { ...baseJob.other_info };
+    const otherInfo: NonNullable<JobListing["other_info"]> = { ...baseJob.other_info };
     const summaryIdx = html.indexOf("id='section-job-summary'");
     if (summaryIdx !== -1) {
       const chunk = html.substring(summaryIdx, summaryIdx + 2500);
@@ -398,33 +399,30 @@ export async function scrapeGenericDetail(
     }
 
     return baseJob;
-  } catch (err) {
+  } catch {
     return baseJob;
   }
 }
 
 /**
  * Scrapling Python Service Bridge
- * When the local Scrapling service is running (http://127.0.0.1:8000), use its anti-bot stealth & adaptive extractor
+ * Uses the configured Scrapling service, with localhost only as a development fallback.
  */
 async function fetchFromScraplingService(
   url: string,
   platform?: string
 ): Promise<Partial<JobListing> | null> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-
-    const response = await fetch("http://127.0.0.1:8000/api/scrape/detail", {
+    const response = await callCrawlerService("/api/scrape/detail", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, platform, use_stealth: false }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+    }, 5_000);
 
-    if (response.ok) {
-      const resData = await response.json();
+    if (response.ok && response.data) {
+      const resData = response.data as {
+        success?: boolean;
+        data?: Partial<JobListing>;
+      };
       if (resData.success && resData.data) {
         return resData.data;
       }

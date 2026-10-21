@@ -6,9 +6,6 @@ import {
   UploadCloud,
   FileText,
   Sparkles,
-  CheckCircle,
-  Briefcase,
-  User,
   Plus,
   Trash2,
   Sliders,
@@ -35,27 +32,46 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
   const [pastedText, setPastedText] = useState("");
   const [newSkillInput, setNewSkillInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   if (!isOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessing(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = (event.target?.result as string) || "";
-      // Parse file text
-      const parsed = parseCVText(content, file.name);
+    setUploadError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/cv/extract", {
+        method: "POST",
+        body: formData,
+      });
+      const result = (await response.json()) as {
+        success?: boolean;
+        text?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !result.success || !result.text) {
+        throw new Error(result.error || "Không thể đọc tệp CV");
+      }
+
+      const parsed = parseCVText(result.text, file.name);
       setDraftCV(parsed);
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : "Không thể đọc tệp này. Hãy thử dán nội dung văn bản CV."
+      );
+    } finally {
       setIsProcessing(false);
-    };
-    reader.onerror = () => {
-      alert("Không thể đọc tệp này. Hãy thử dán nội dung văn bản CV.");
-      setIsProcessing(false);
-    };
-    reader.readAsText(file);
+      e.target.value = "";
+    }
   };
 
   const handleParsePastedText = () => {
@@ -178,6 +194,11 @@ export const CvUploadModal: React.FC<CvUploadModalProps> = ({
                   Duyệt tệp từ máy tính
                 </span>
               </label>
+              {uploadError && (
+                <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-400">
+                  {uploadError}
+                </p>
+              )}
 
               {draftCV?.fileName && (
                 <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">

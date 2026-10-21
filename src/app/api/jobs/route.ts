@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getLiveRealtimeJobs } from "@/services/liveJobService";
 import { ITSubfield, PlatformSource } from "@/types/job";
 import { isJobValidWithinMonth, removeVietnameseTones } from "@/utils/formatters";
+import { callCrawlerService } from "@/services/crawlerService";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -47,10 +48,14 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     success: true,
-    isRealtime: true,
+    isRealtime: liveResult.isRealtime,
     total: results.length,
     data: results,
     sourcesBreakdown: liveResult.sources,
+    liveSources: liveResult.liveSources,
+    snapshotSources: liveResult.snapshotSources,
+    liveJobCount: liveResult.liveJobCount,
+    snapshotJobCount: liveResult.snapshotJobCount,
     timestamp: new Date().toISOString(),
   });
 }
@@ -59,18 +64,37 @@ export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const platform = body.platform as PlatformSource | undefined;
+    const crawlerResult = await callCrawlerService(
+      "/api/crawl/run",
+      {
+        method: "POST",
+        body: JSON.stringify({ platform }),
+      },
+      5_000
+    );
+    const liveResult = await getLiveRealtimeJobs("");
+    const crawledCount = platform
+      ? liveResult.sources[platform] ?? 0
+      : liveResult.liveJobCount;
 
     return NextResponse.json({
       success: true,
       message: platform
-        ? `Đồng bộ thành công nguồn IT ${platform}.`
-        : "Đồng bộ thành công toàn bộ 8 nguồn dữ liệu IT.",
+        ? `Đã làm mới dữ liệu nguồn ${platform}.`
+        : "Đã làm mới 3 nguồn trực tiếp và nạp lại dữ liệu đã đồng bộ của 5 nguồn còn lại.",
       syncedAt: new Date().toISOString(),
-      crawledCount: Math.floor(Math.random() * 30) + 15,
-      deduplicatedCount: Math.floor(Math.random() * 8) + 2,
-      expiredPrunedCount: Math.floor(Math.random() * 5) + 3, // Shows expired jobs pruned
+      crawledCount,
+      totalCount: liveResult.total,
+      sourcesBreakdown: liveResult.sources,
+      liveSources: liveResult.liveSources,
+      snapshotSources: liveResult.snapshotSources,
+      crawlerService: {
+        configured: crawlerResult.configured,
+        triggered: crawlerResult.ok,
+        error: crawlerResult.error,
+      },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { success: false, error: "Lỗi đồng bộ dữ liệu" },
       { status: 500 }

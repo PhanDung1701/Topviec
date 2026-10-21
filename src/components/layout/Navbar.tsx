@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Sparkles, Bot, Briefcase, Activity, BookmarkCheck, Upload, FileText, CheckCircle2 } from "lucide-react";
+import { Sparkles, Bot, Briefcase, Activity, BookmarkCheck, Upload, CheckCircle2 } from "lucide-react";
 import { UserCVProfile } from "@/types/job";
 
 interface NavbarProps {
@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </div>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:block">
-                Tổng hợp 8 sàn IT • Cập nhật ≤ 1 tháng
+                3 nguồn trực tiếp • 5 nguồn đã đồng bộ
               </p>
             </div>
           </Link>

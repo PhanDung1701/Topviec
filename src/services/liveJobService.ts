@@ -2,6 +2,20 @@ import { JobListing, PlatformSource, ITSubfield } from "@/types/job";
 import { generateFingerprint, removeVietnameseTones } from "@/utils/formatters";
 import { MOCK_JOBS } from "@/data/mockJobs";
 
+export const LIVE_PLATFORM_SOURCES: PlatformSource[] = [
+  "TOPCV",
+  "CAREERVIET",
+  "CAREERLINK",
+];
+
+export const SNAPSHOT_PLATFORM_SOURCES: PlatformSource[] = [
+  "VIETNAMWORKS",
+  "VIECLAM24H",
+  "JOBSGO",
+  "JOBOKO",
+  "INDEED",
+];
+
 // ==========================================
 // 1. BỘ TỪ KHÓA MỤC TIÊU & LOẠI TRỪ NGHIÊM NGẶT
 // ==========================================
@@ -166,7 +180,8 @@ export async function fetchLiveTopCV(keyword: string): Promise<JobListing[]> {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      next: { revalidate: 30 },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
     });
 
     if (!res.ok) return jobs;
@@ -275,7 +290,8 @@ export async function fetchLiveCareerViet(keyword: string): Promise<JobListing[]
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
-      next: { revalidate: 30 },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
     });
 
     if (!res.ok) return jobs;
@@ -382,7 +398,8 @@ export async function fetchLiveCareerLink(keyword: string): Promise<JobListing[]
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      next: { revalidate: 30 },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
     });
 
     if (!res.ok) return jobs;
@@ -784,6 +801,10 @@ export async function getLiveRealtimeJobs(keyword: string = ""): Promise<{
   isRealtime: boolean;
   total: number;
   sources: Record<PlatformSource, number>;
+  liveSources: PlatformSource[];
+  snapshotSources: PlatformSource[];
+  liveJobCount: number;
+  snapshotJobCount: number;
 }> {
   const normKey = removeVietnameseTones(keyword).toLowerCase().trim();
 
@@ -828,11 +849,13 @@ export async function getLiveRealtimeJobs(keyword: string = ""): Promise<{
   }
 
   // Overlay fresh live jobs from real-time sources
+  const liveFingerprints = new Set<string>();
   for (const res of liveResults) {
     if (res.status === "fulfilled" && Array.isArray(res.value)) {
       for (const j of res.value) {
         if (isStrictlyITJob(j.title)) {
           masterMap.set(j.fingerprint_hash, j);
+          liveFingerprints.add(j.fingerprint_hash);
         }
       }
     }
@@ -868,11 +891,19 @@ export async function getLiveRealtimeJobs(keyword: string = ""): Promise<{
     }
   }
 
+  const liveJobCount = allJobs.filter((job) =>
+    liveFingerprints.has(job.fingerprint_hash)
+  ).length;
+
   return {
     jobs: allJobs,
-    isRealtime: true,
+    isRealtime: liveJobCount > 0,
     total: allJobs.length,
     sources,
+    liveSources: LIVE_PLATFORM_SOURCES,
+    snapshotSources: SNAPSHOT_PLATFORM_SOURCES,
+    liveJobCount,
+    snapshotJobCount: allJobs.length - liveJobCount,
   };
 }
 

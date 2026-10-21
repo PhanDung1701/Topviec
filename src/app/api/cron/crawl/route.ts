@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { callCrawlerService } from "@/services/crawlerService";
+import { getLiveRealtimeJobs } from "@/services/liveJobService";
+
+export const maxDuration = 60;
 
 /**
  * Endpoint Cron Job cho Next.js (hỗ trợ Vercel Cron / External Cron Runner)
- * Tần suất khuyến nghị: 0 *\/6 * * * (Mỗi 6 tiếng 1 lần)
+ * Vercel Hobby schedule: chạy mỗi ngày theo vercel.json.
  */
 export async function GET(request: Request) {
   try {
@@ -14,26 +18,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // 1. Thử gọi Scrapling FastAPI Microservice nếu đang chạy (cổng 8000)
-    let triggeredPythonService = false;
-    try {
-      const apiRes = await fetch("http://127.0.0.1:8000/api/crawl/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (apiRes.ok) {
-        triggeredPythonService = true;
-      }
-    } catch {
-      // Python service offline, không ảnh hưởng
-    }
+    // Production uses a separately deployed Python service configured through
+    // CRAWLER_API_URL. Localhost is only used during development.
+    const crawlerResult = await callCrawlerService(
+      "/api/crawl/run",
+      { method: "POST", body: "{}" },
+      10_000
+    );
+
+    // Always refresh the live-capable TypeScript sources. This gives the cron
+    // useful work even when the optional Python service is not configured.
+    const liveResult = await getLiveRealtimeJobs("");
 
     return NextResponse.json({
       success: true,
-      message: "Chu kỳ cập nhật định kỳ 6 tiếng đã được kích hoạt thành công.",
+      message: crawlerResult.ok
+        ? "Đã kích hoạt crawler service và làm mới nguồn trực tiếp."
+        : "Đã làm mới nguồn trực tiếp; crawler service ngoài chưa được kích hoạt.",
       timestamp: new Date().toISOString(),
-      triggeredMicroservice: triggeredPythonService,
-      nextSchedule: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
+      triggeredMicroservice: crawlerResult.ok,
+      crawlerServiceConfigured: crawlerResult.configured,
+      crawlerServiceError: crawlerResult.error,
+      refreshedLiveJobs: liveResult.liveJobCount,
+      totalJobs: liveResult.total,
+      sourcesBreakdown: liveResult.sources,
+      nextSchedule: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
     });
   } catch (error) {
     return NextResponse.json(

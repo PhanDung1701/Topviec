@@ -209,7 +209,7 @@ export function calculateMatchAnalysis(cv: UserCVProfile, job: JobListing): Matc
   // Calculate skill score
   const totalReq = jobRequiredSkills.length;
   const skillRatio = totalReq > 0 ? matchedSkills.length / totalReq : 0.7;
-  let rawScore = skillRatio * 70; // 70% weight for skills
+  const rawScore = skillRatio * 70; // 70% weight for skills
 
   // Experience level bonus/penalty (20% weight)
   let expMatch = true;

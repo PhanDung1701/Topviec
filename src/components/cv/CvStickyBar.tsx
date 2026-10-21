@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Sparkles, Edit3, X, CheckCircle2, SlidersHorizontal } from "lucide-react";
+import { Sparkles, Edit3, X, CheckCircle2 } from "lucide-react";
 import { UserCVProfile } from "@/types/job";
 
 interface CvStickyBarProps {

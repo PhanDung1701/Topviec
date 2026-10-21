@@ -112,7 +112,7 @@ export interface JobListing {
     industry_category?: string;
     posted_date_text?: string;
     deadline_text?: string;
-    [key: string]: any;
+    [key: string]: string | string[] | undefined;
   };
 }
 

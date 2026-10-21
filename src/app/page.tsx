@@ -4,23 +4,15 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import confetti from "canvas-confetti";
 import {
   Sparkles,
-  Layers,
   ArrowUpDown,
   SearchX,
   SlidersHorizontal,
-  Bot,
-  ExternalLink,
-  Zap,
-  TrendingUp,
   Code2,
   CalendarCheck,
   ShieldCheck,
-  CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Radio,
 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { SearchBar } from "@/components/jobs/SearchBar";
@@ -40,7 +32,8 @@ export default function HomePage() {
   const [jobs, setJobs] = useState<JobListing[]>(MOCK_JOBS);
   const [isLiveLoading, setIsLiveLoading] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>("Vừa cập nhật");
-  const [liveSourcesBreakdown, setLiveSourcesBreakdown] = useState<Record<string, number>>({});
+  const [liveJobCount, setLiveJobCount] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
 
   // Active User CV Profile (Defaults to null - User uploads or pastes their own CV)
   const [activeCV, setActiveCV] = useState<UserCVProfile | null>(null);
@@ -114,9 +107,7 @@ export default function HomePage() {
         const data = await res.json();
         if (data.success && Array.isArray(data.data) && data.data.length > 0) {
           setJobs(data.data);
-          if (data.sourcesBreakdown) {
-            setLiveSourcesBreakdown(data.sourcesBreakdown);
-          }
+          setLiveJobCount(data.liveJobCount ?? 0);
           setLastSyncTime(new Date().toLocaleTimeString("vi-VN"));
         }
       }
@@ -127,11 +118,6 @@ export default function HomePage() {
     }
   }, []);
 
-  // Fetch initial live data on mount
-  useEffect(() => {
-    fetchRealtimeJobs("");
-  }, [fetchRealtimeJobs]);
-
   // Debounced auto-fetch on keyword change (real-time continuously updating)
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -139,6 +125,11 @@ export default function HomePage() {
     }, 450);
     return () => clearTimeout(timer);
   }, [filters.keyword, fetchRealtimeJobs]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCurrentTime(Date.now()), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Pre-calculate Match Analysis for all jobs based on active CV
   const jobAnalyses = useMemo(() => {
@@ -280,9 +271,9 @@ export default function HomePage() {
 
       // 11. Time Posted filter (within 30 days)
       if (filters.timePosted !== "all") {
+        if (currentTime === 0) return true;
         const postTime = new Date(job.crawled_at).getTime();
-        const now = typeof window !== "undefined" ? Date.now() : 1776312000000;
-        const diffHours = (now - postTime) / (1000 * 60 * 60);
+        const diffHours = (currentTime - postTime) / (1000 * 60 * 60);
 
         if (filters.timePosted === "24h" && diffHours > 24) return false;
         if (filters.timePosted === "7d" && diffHours > 168) return false;
@@ -311,12 +302,7 @@ export default function HomePage() {
       // newest
       return new Date(b.crawled_at).getTime() - new Date(a.crawled_at).getTime();
     });
-  }, [filters, activeCV, jobAnalyses]);
-
-  // Reset to page 1 whenever filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filters]);
+  }, [filters, activeCV, jobAnalyses, jobs, currentTime]);
 
   // Requirement: Mỗi trang hiển thị 15 JD
   const totalPages = Math.max(1, Math.ceil(filteredJobs.length / ITEMS_PER_PAGE));
@@ -393,7 +379,7 @@ export default function HomePage() {
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-50 px-3.5 py-1 text-xs font-bold text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-950/60 dark:text-emerald-300 shadow-xs">
               <Code2 className="h-3.5 w-3.5 text-emerald-600 animate-pulse" />
-              <span>Chuyên Trang Việc Làm IT • Tổng Hợp Toàn Bộ 8 Sàn Tuyển Dụng</span>
+              <span>Việc Làm IT • 3 Nguồn Trực Tiếp + 5 Nguồn Đã Đồng Bộ</span>
             </div>
 
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
@@ -404,10 +390,11 @@ export default function HomePage() {
             </h1>
 
             <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300">
-              Tổng hợp dữ liệu ngành Công nghệ thông tin theo thời gian thực từ 8 nền tảng:{" "}
+              Tổng hợp dữ liệu ngành Công nghệ thông tin từ 8 nền tảng; truy vấn trực tiếp 3 nguồn:{" "}
               <strong className="text-slate-900 dark:text-white">
-                TopCV, VietnamWorks, Vieclam24h, CareerViet, JobsGO, CareerLink, Joboko, Indeed
+                TopCV, CareerViet, CareerLink
               </strong>
+              {" "}và dùng dữ liệu đã đồng bộ cho VietnamWorks, Vieclam24h, JobsGO, Joboko, Indeed.
             </p>
 
             {/* Key Quality Assurances (Requirements 1, 2, 3) */}
@@ -448,7 +435,7 @@ export default function HomePage() {
                 </span>
                 <div className="text-left">
                   <div className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                    <span>⚡ Chế độ Real-time: Đang kết nối trực tiếp các trang gốc</span>
+                    <span>⚡ Chế độ kết hợp: nguồn trực tiếp và dữ liệu đã đồng bộ</span>
                     {isLiveLoading && (
                       <span className="animate-pulse text-[11px] text-emerald-600 font-bold">
                         (Đang truy vấn dữ liệu mới...)
@@ -456,7 +443,7 @@ export default function HomePage() {
                     )}
                   </div>
                   <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                    Tự động tìm kiếm trực tiếp trên TopCV, CareerViet, CareerLink... • Đồng bộ lúc: <strong>{lastSyncTime}</strong>
+                    Truy vấn trực tiếp TopCV, CareerViet, CareerLink ({liveJobCount} tin live) • Làm mới lúc: <strong>{lastSyncTime}</strong>
                   </p>
                 </div>
               </div>
@@ -467,7 +454,7 @@ export default function HomePage() {
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold shadow-xs transition disabled:opacity-50 cursor-pointer shrink-0"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isLiveLoading ? "animate-spin" : ""}`} />
-                <span>{isLiveLoading ? "Đang đồng bộ..." : "Làm mới trực tiếp"}</span>
+                <span>{isLiveLoading ? "Đang làm mới..." : "Làm mới dữ liệu"}</span>
               </button>
             </div>
 
@@ -598,7 +585,7 @@ export default function HomePage() {
                   </span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>Real-time Live</span>
+                    <span>{liveJobCount > 0 ? `${liveJobCount} tin live` : "Dữ liệu đồng bộ"}</span>
                   </span>
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">

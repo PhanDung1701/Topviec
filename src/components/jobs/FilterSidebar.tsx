@@ -11,12 +11,11 @@ import {
   Sparkles,
   Check,
   Code2,
-  CalendarCheck,
   Cpu,
 } from "lucide-react";
 import { ExperienceLevel, FilterState, ITSubfield, JobType, PlatformSource } from "@/types/job";
 import { ALL_PLATFORMS, PLATFORM_CONFIGS } from "@/utils/platforms";
-import { EXPERIENCE_LABELS, IT_SUBFIELD_LABELS, JOB_TYPE_LABELS } from "@/utils/formatters";
+import { EXPERIENCE_LABELS, JOB_TYPE_LABELS } from "@/utils/formatters";
 
 interface FilterSidebarProps {
   filters: FilterState;

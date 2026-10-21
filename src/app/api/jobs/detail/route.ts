@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { enrichJobDetail } from "@/services/jobDetailScraper";
 import { getLiveRealtimeJobs } from "@/services/liveJobService";
 import { MOCK_JOBS } from "@/data/mockJobs";
 import { JobListing } from "@/types/job";
 
 export async function GET(request: Request) {
+  await connection();
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");

@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TopViec AI
 
-## Getting Started
+TopViec AI là ứng dụng tổng hợp việc làm IT, lọc tin còn hạn, gộp tin trùng và chấm mức độ phù hợp giữa CV với mô tả công việc.
 
-First, run the development server:
+## Kiến trúc dữ liệu
 
-```bash
+- **Nguồn truy vấn trực tiếp:** TopCV, CareerViet, CareerLink. Next.js tải và chuẩn hóa dữ liệu từ trang nguồn khi người dùng tìm kiếm hoặc làm mới.
+- **Nguồn snapshot:** VietnamWorks, Vieclam24h, JobsGO, Joboko, Indeed. Dữ liệu được đọc từ `src/data/mockJobs.ts`, do crawler định kỳ cập nhật.
+- **Crawler Python tùy chọn:** FastAPI + Scrapling dùng để làm giàu chi tiết việc làm và cập nhật snapshot. Trên production, service này phải được deploy riêng.
+- **Fallback:** Nếu crawler Python không khả dụng, Next.js vẫn truy vấn 3 nguồn trực tiếp và phục vụ snapshot gần nhất.
+
+## Công nghệ
+
+- Next.js 16.4, React 19, TypeScript, Tailwind CSS 4
+- FastAPI, Scrapling và Uvicorn
+- `pdf-parse` và `fflate` để trích xuất nội dung CV PDF/DOCX
+
+## Chạy local
+
+Yêu cầu Node.js 22.3+ và Python 3.12+.
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Mở <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Để chạy thêm crawler Python:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\pip install -r crawler\requirements.txt
+npm run scrapling:api
+```
 
-## Learn More
+Mặc định, bản development tìm crawler tại `http://127.0.0.1:8000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Biến môi trường
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Sao chép `.env.example` thành `.env.local`:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```dotenv
+CRON_SECRET=replace-with-a-random-secret
+CRAWLER_API_URL=https://crawler.example.com
+CRAWLER_API_TOKEN=replace-with-a-shared-secret
+```
 
-## Deploy on Vercel
+- `CRON_SECRET`: bảo vệ endpoint `/api/cron/crawl`. Vercel tự gửi giá trị này trong header cron.
+- `CRAWLER_API_URL`: địa chỉ FastAPI đã deploy; không đặt `127.0.0.1` trên Vercel.
+- `CRAWLER_API_TOKEN`: token dùng chung giữa Next.js và FastAPI.
+- `CRAWLER_ALLOWED_ORIGINS`: cấu hình phía FastAPI, danh sách origin cách nhau bởi dấu phẩy; mặc định là `http://localhost:3000`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Lệnh hữu ích
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```powershell
+npm run lint
+npm run build
+npm run scrapling:crawl
+npm run scrapling:api
+npm run scrapling:schedule
+```
+
+## API chính
+
+- `GET /api/jobs`: trả danh sách việc làm và metadata phân biệt nguồn trực tiếp/snapshot.
+- `POST /api/jobs`: làm mới dữ liệu thật; nếu crawler service được cấu hình, endpoint cũng kích hoạt service đó.
+- `GET /api/jobs/detail`: lấy và làm giàu chi tiết một tin tuyển dụng.
+- `POST /api/cv/extract`: trích xuất văn bản từ CV PDF, DOCX hoặc TXT, tối đa 10 MB.
+- `GET /api/cron/crawl`: endpoint dành cho Vercel Cron hoặc cron runner ngoài.
+
+## Deploy
+
+### Next.js trên Vercel
+
+1. Cấu hình `CRON_SECRET`.
+2. Nếu cần pipeline Python, deploy thư mục `crawler/` lên một dịch vụ chạy Python lâu dài như Railway, Render, Fly.io hoặc Cloud Run.
+3. Cấu hình `CRAWLER_API_URL` và `CRAWLER_API_TOKEN` trên cả hai phía.
+4. `vercel.json` chạy cron mỗi ngày, phù hợp giới hạn Vercel Hobby.
+
+Filesystem của Vercel không phải kho lưu trữ lâu dài. Crawler Python cần dùng storage/database bền vững hoặc cập nhật snapshot trong quá trình CI nếu muốn dữ liệu 5 nguồn tồn tại qua các lần deploy.
+
+### Self-host
+
+Có thể chạy Next.js và FastAPI trên cùng máy. Trong development, Next.js tự dùng `127.0.0.1:8000`; trong production vẫn nên đặt `CRAWLER_API_URL` rõ ràng.
+
+## Lưu ý CV
+
+- PDF phải có lớp văn bản; PDF scan ảnh cần OCR riêng.
+- DOCX được đọc dưới dạng văn bản thuần.
+- Nội dung CV được xử lý trong request và không được ghi xuống filesystem bởi endpoint Next.js.

@@ -11,6 +11,7 @@
  * 6. Tự động đồng bộ vào hệ thống (src/data/mockJobs.ts) mà KHÔNG sinh ra bất kỳ file rác nào.
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const https = require('https');
 const http = require('http');
 const fs = require('fs');
@@ -341,7 +342,7 @@ function parseCareerviet(html) {
         update_time_text: 'Cập nhật gần đây'
       });
     }
-  } catch (e) {
+  } catch {
     // Silent catch
   }
 

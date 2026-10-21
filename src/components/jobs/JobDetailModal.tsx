@@ -5,7 +5,6 @@ import {
   X,
   ExternalLink,
   MapPin,
-  DollarSign,
   Clock,
   Sparkles,
   Building2,
@@ -17,20 +16,16 @@ import {
   Briefcase,
   Layers,
   Lightbulb,
-  GraduationCap,
   Users,
   Calendar,
   Globe,
   RefreshCw,
   Send,
-  ShieldCheck,
-  Check,
 } from "lucide-react";
 import { JobListing, MatchAnalysis, UserCVProfile } from "@/types/job";
 import { PLATFORM_CONFIGS, buildApplyUrl } from "@/utils/platforms";
 import {
   EXPERIENCE_LABELS,
-  IT_SUBFIELD_LABELS,
   JOB_TYPE_LABELS,
   formatDaysRemaining,
   formatSalary,
@@ -58,12 +53,12 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
   onToggleSave,
   onJobEnriched,
 }) => {
-  const [currentJob, setCurrentJob] = useState<JobListing | null>(job);
+  const [enrichedJob, setEnrichedJob] = useState<JobListing | null>(null);
   const [isLoadingEnrichment, setIsLoadingEnrichment] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("all");
+  const currentJob = enrichedJob?.id === job?.id ? enrichedJob : job;
 
   useEffect(() => {
-    setCurrentJob(job);
     if (!job) return;
 
     // Check if the job already has deep full detail
@@ -73,21 +68,29 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
       (job.description && job.description.length > 500);
 
     if (!hasFullDetail && job.source_url) {
-      setIsLoadingEnrichment(true);
-      fetch(`/api/jobs/detail?id=${encodeURIComponent(job.id)}&url=${encodeURIComponent(job.source_url)}`)
-        .then((res) => res.json())
-        .then((data) => {
+      const controller = new AbortController();
+      const enrich = async () => {
+        setIsLoadingEnrichment(true);
+        try {
+          const response = await fetch(
+            `/api/jobs/detail?id=${encodeURIComponent(job.id)}&url=${encodeURIComponent(job.source_url)}`,
+            { signal: controller.signal }
+          );
+          const data = await response.json();
           if (data.success && data.data) {
-            setCurrentJob(data.data);
+            setEnrichedJob(data.data);
             onJobEnriched?.(data.data);
           }
-        })
-        .catch((err) => {
-          console.warn("Detail enrichment notice:", err);
-        })
-        .finally(() => {
+        } catch (error) {
+          if (error instanceof Error && error.name !== "AbortError") {
+            console.warn("Detail enrichment notice:", error);
+          }
+        } finally {
           setIsLoadingEnrichment(false);
-        });
+        }
+      };
+      void enrich();
+      return () => controller.abort();
     }
   }, [job, onJobEnriched]);
 
@@ -216,6 +219,8 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
           <div className="flex flex-col sm:flex-row items-start gap-4">
             <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 flex items-center justify-center p-2 shadow-sm">
               {currentJob.company_logo ? (
+                // Logos come from arbitrary crawler sources, so Next Image cannot use a safe host allow-list.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentJob.company_logo}
                   alt={currentJob.company_name}
