@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  BookmarkCheck,
 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { SearchBar } from "@/components/jobs/SearchBar";
@@ -43,7 +44,35 @@ export default function HomePage() {
   const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
 
   // Saved Jobs Bookmarking
-  const [savedJobIds, setSavedJobIds] = useState<string[]>(["job-it-001"]);
+  const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [hasLoadedSavedJobs, setHasLoadedSavedJobs] = useState(false);
+
+  // Keep bookmarks across refreshes without requiring an account.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("topviec:saved-job-ids");
+      if (stored) {
+        const parsed: unknown = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.every((id) => typeof id === "string")) {
+          setSavedJobIds(parsed);
+        }
+      }
+    } catch {
+      // Ignore malformed or unavailable browser storage.
+    } finally {
+      setHasLoadedSavedJobs(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedSavedJobs) return;
+    try {
+      window.localStorage.setItem("topviec:saved-job-ids", JSON.stringify(savedJobIds));
+    } catch {
+      // Bookmarking still works for the current session if storage is unavailable.
+    }
+  }, [savedJobIds, hasLoadedSavedJobs]);
 
   // Search & Filter State
   const [filters, setFilters] = useState<FilterState>({
@@ -168,6 +197,9 @@ export default function HomePage() {
   // Filter & Sort Logic
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
+      if (showSavedOnly && !savedJobIds.includes(job.id)) {
+        return false;
+      }
       // 1. REQUIREMENT 2: Expiration and 1-month freshness filter
       if (filters.onlyActiveWithinMonth && !isJobValidWithinMonth(job)) {
         return false;
@@ -302,7 +334,7 @@ export default function HomePage() {
       // newest
       return new Date(b.crawled_at).getTime() - new Date(a.crawled_at).getTime();
     });
-  }, [filters, activeCV, jobAnalyses, jobs, currentTime]);
+  }, [filters, activeCV, jobAnalyses, jobs, currentTime, savedJobIds, showSavedOnly]);
 
   // Requirement: Mỗi trang hiển thị 15 JD
   const totalPages = Math.max(1, Math.ceil(filteredJobs.length / ITEMS_PER_PAGE));
@@ -364,6 +396,14 @@ export default function HomePage() {
         activeCV={activeCV}
         onOpenCvModal={() => setIsCvModalOpen(true)}
         savedJobsCount={savedJobIds.length}
+        onToggleSavedModal={() => {
+          setShowSavedOnly((current) => !current);
+          setCurrentPage(1);
+        }}
+        onShowAllJobs={() => {
+          setShowSavedOnly(false);
+          setCurrentPage(1);
+        }}
         activeTab="jobs"
       />
 
@@ -577,6 +617,21 @@ export default function HomePage() {
           <div id="job-results-container" className="lg:col-span-8 space-y-4">
             {/* Results Header: Count & Sort */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSavedOnly((current) => !current);
+                  setCurrentPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 self-start rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                  showSavedOnly
+                    ? "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-amber-300 hover:text-amber-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                }`}
+              >
+                <BookmarkCheck className="h-3.5 w-3.5" />
+                {showSavedOnly ? "Đang xem tin đã lưu" : "Xem tin đã lưu"}
+              </button>
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                   <span>Việc Làm IT Còn Hạn Tuyển Dụng</span>
